@@ -1,11 +1,15 @@
 package org.opentripplanner.transit.raptor.rangeraptor.standard.stoparrivals.view;
 
-import org.opentripplanner.transit.raptor.api.transit.TransferLeg;
+import org.opentripplanner.transit.raptor.api.transit.RaptorTransfer;
+import org.opentripplanner.transit.raptor.api.transit.RaptorTripPattern;
 import org.opentripplanner.transit.raptor.api.transit.RaptorTripSchedule;
 import org.opentripplanner.transit.raptor.api.view.ArrivalView;
+import org.opentripplanner.transit.raptor.rangeraptor.standard.stoparrivals.AccessStopArrivalState;
 import org.opentripplanner.transit.raptor.rangeraptor.standard.stoparrivals.StopArrivalState;
 import org.opentripplanner.transit.raptor.rangeraptor.standard.stoparrivals.Stops;
 import org.opentripplanner.transit.raptor.rangeraptor.transit.TransitCalculator;
+
+import java.util.function.ToIntFunction;
 
 
 /**
@@ -23,10 +27,12 @@ import org.opentripplanner.transit.raptor.rangeraptor.transit.TransitCalculator;
 public class StopsCursor<T extends RaptorTripSchedule> {
     private Stops<T> stops;
     private final TransitCalculator transitCalculator;
+    private final ToIntFunction<RaptorTripPattern> boardSlackProvider;
 
-    public StopsCursor(Stops<T> stops, TransitCalculator transitCalculator) {
+    public StopsCursor(Stops<T> stops, TransitCalculator transitCalculator, ToIntFunction<RaptorTripPattern> boardSlackProvider) {
         this.stops = stops;
         this.transitCalculator = transitCalculator;
+        this.boardSlackProvider = boardSlackProvider;
     }
 
     public boolean exist(int round, int stop) {
@@ -46,7 +52,7 @@ public class StopsCursor<T extends RaptorTripSchedule> {
     /**
      * Return a fictive Transfer arrival for the rejected transfer stop arrival.
      */
-    public StopArrivalViewAdapter.Transfer<T> rejectedTransfer(int round, int fromStop, TransferLeg transferLeg, int toStop, int arrivalTime) {
+    public StopArrivalViewAdapter.Transfer<T> rejectedTransfer(int round, int fromStop, RaptorTransfer transferLeg, int toStop, int arrivalTime) {
             StopArrivalState<T> arrival = new StopArrivalState<>();
             arrival.transferToStop(fromStop, arrivalTime, transferLeg.durationInSeconds());
             return new StopArrivalViewAdapter.Transfer<>(round, toStop, arrival, this);
@@ -55,10 +61,13 @@ public class StopsCursor<T extends RaptorTripSchedule> {
     /**
      * A access stop arrival, time-shifted according to the first transit boarding/departure time
      */
-    ArrivalView<T> access(int stop, int transitDepartureTime) {
-        return newAccessView(stop, transitDepartureTime);
+    ArrivalView<T> access(int stop, StopArrivalViewAdapter.Transit<T> transitLeg) {
+        return newAccessView(
+                stop,
+                transitLeg.departureTime(),
+                boardSlackProvider.applyAsInt(transitLeg.trip().pattern())
+        );
     }
-
 
     /**
      * Set cursor to the transit state at round and stop. Throws
@@ -81,19 +90,19 @@ public class StopsCursor<T extends RaptorTripSchedule> {
      * Access without known transit, uses the iteration departure time without time shift
      */
     private ArrivalView<T> newAccessView(int stop) {
-        StopArrivalState<T> arrival = stops.get(0, stop);
+        AccessStopArrivalState<T> arrival = stops.get(0, stop).asAccessStopArrivalState();
         int departureTime = transitCalculator.minusDuration(arrival.time(), arrival.accessDuration());
-        return new StopArrivalViewAdapter.Access<>(stop, departureTime, arrival.time());
+        return new StopArrivalViewAdapter.Access<>(stop, departureTime, arrival.time(), arrival.access());
     }
 
     /**
-     * A access stop arrival, time-shifted according to the first transit boarding/departure time
+     * A access stop arrival, time-shifted according to the first transit boarding/departure time.
      */
-    private ArrivalView<T> newAccessView(int stop, int transitDepartureTime) {
-        StopArrivalState<T> state = stops.get(0, stop);
-        int departureTime = transitCalculator.originDepartureTime(transitDepartureTime, state.accessDuration());
+    private ArrivalView<T> newAccessView(int stop, int transitDepartureTime, int boardSlack) {
+        AccessStopArrivalState<T> state = stops.get(0, stop).asAccessStopArrivalState();
+        int departureTime = transitCalculator.minusDuration(transitDepartureTime, state.accessDuration() + boardSlack);
         int arrivalTime = transitCalculator.plusDuration(departureTime, state.accessDuration());
-        return new StopArrivalViewAdapter.Access<>(stop, departureTime, arrivalTime);
+        return new StopArrivalViewAdapter.Access<>(stop, departureTime, arrivalTime, state.access());
     }
 
     private ArrivalView<T> newTransitOrTransferView(int round, int stop) {

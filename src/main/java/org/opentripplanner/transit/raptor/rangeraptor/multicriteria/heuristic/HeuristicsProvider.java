@@ -6,7 +6,7 @@ import org.opentripplanner.transit.raptor.rangeraptor.RoundProvider;
 import org.opentripplanner.transit.raptor.rangeraptor.debug.DebugHandlerFactory;
 import org.opentripplanner.transit.raptor.rangeraptor.multicriteria.arrivals.AbstractStopArrival;
 import org.opentripplanner.transit.raptor.rangeraptor.path.DestinationArrivalPaths;
-import org.opentripplanner.transit.raptor.rangeraptor.transit.CostCalculator;
+import org.opentripplanner.transit.raptor.api.transit.CostCalculator;
 
 /**
  * A wrapper around {@link Heuristics} to cash elements to avoid recalculation
@@ -42,6 +42,10 @@ public final class HeuristicsProvider<T extends RaptorTripSchedule> {
         this.debugHandlerFactory = debugHandlerFactory;
     }
 
+    /**
+     * This is a very effective optimization, enabled by the
+     * {@link org.opentripplanner.transit.raptor.api.request.Optimization#PARETO_CHECK_AGAINST_DESTINATION}.
+     */
     public boolean rejectDestinationArrivalBasedOnHeuristic(AbstractStopArrival<T> arrival) {
         if(heuristics == null || paths.isEmpty()) {
             return false;
@@ -89,14 +93,6 @@ public final class HeuristicsProvider<T extends RaptorTripSchedule> {
         return paths.qualify(departureTime, minArrivalTime, minNumberOfTransfers, minCost);
     }
 
-    private HeuristicAtStop createHeuristicAtStop(int bestTravelDuration, int bestNumOfTransfers) {
-        return new HeuristicAtStop(
-                bestTravelDuration,
-                bestNumOfTransfers,
-                costCalculator.calculateMinCost(bestTravelDuration, bestNumOfTransfers)
-        );
-    }
-
     private String rejectErrorMessage(int stop) {
         return get(stop) == null
                 ? "The stop was not reached in the heuristic calculation."
@@ -106,8 +102,19 @@ public final class HeuristicsProvider<T extends RaptorTripSchedule> {
 
     private HeuristicAtStop get(int stop) {
         if(stops[stop] == null && heuristics.reached(stop)) {
-            stops[stop] = createHeuristicAtStop(heuristics.bestTravelDuration(stop), heuristics.bestNumOfTransfers(stop));
+            stops[stop] = createHeuristicAtStop(
+                    heuristics.bestTravelDuration(stop),
+                    heuristics.bestNumOfTransfers(stop)
+            );
         }
         return stops[stop];
+    }
+
+    private HeuristicAtStop createHeuristicAtStop(int bestTravelDuration, int bestNumOfTransfers) {
+        return new HeuristicAtStop(
+                bestTravelDuration,
+                bestNumOfTransfers,
+                costCalculator.calculateMinCost(bestTravelDuration, bestNumOfTransfers)
+        );
     }
 }

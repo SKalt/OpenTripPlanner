@@ -15,12 +15,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -57,13 +55,13 @@ public class NodeAdapter {
      * This parameter is used internally in this class to be able to produce a
      * list of parameters witch is NOT requested.
      */
-    private final Set<String> parameterNames = new HashSet<>();
+    private final List<String> parameterNames = new ArrayList<>();
 
     /**
      * The collection of children is used to be able to produce a list of unused parameters
      * for all children.
      */
-    private final Set<NodeAdapter> children = new HashSet<>();
+    private final List<NodeAdapter> children = new ArrayList<>();
 
     public NodeAdapter(@NotNull JsonNode node, String source) {
         this(node, source, null);
@@ -78,6 +76,10 @@ public class NodeAdapter {
         this.contextPath = contextPath;
     }
 
+    public String getSource() {
+        return source;
+    }
+
     JsonNode asRawNode(String paramName) {
         return param(paramName);
     }
@@ -88,7 +90,7 @@ public class NodeAdapter {
 
     public NodeAdapter path(String paramName) {
         NodeAdapter child = new NodeAdapter(
-                json.path(paramName),
+                param(paramName),
                 source,
                 fullPath(paramName)
         );
@@ -189,23 +191,30 @@ public class NodeAdapter {
      * @param <E> The enum type
      * @param <T> The map value type.
      * @param mapper The function to use to map a node in the JSON tree into a value of type T.
-     *               The secon argument to the function is the enum NAME(String).
+     *               The second argument to the function is the enum NAME(String).
+     * @return a map of listed enum values as keys with value, or an empty map if not set.
      */
     public <T, E extends Enum<E>> Map<E, T> asEnumMap(
-            String paramName, Class<E> enumClass, BiFunction<NodeAdapter, String, T> mapper
+            String paramName,
+            Class<E> enumClass,
+            BiFunction<NodeAdapter, String, T> mapper
     ) {
-        NodeAdapter node = path(paramName);
+        return localAsEnumMap(paramName, enumClass, mapper, false);
+    }
 
-        if(node.isEmpty()) { return Map.of(); }
-
-        Map<E, T> result = new HashMap<>();
-
-        for (E v : enumClass.getEnumConstants()) {
-            if(node.exist(v.name())) {
-                result.put(v, mapper.apply(node, v.name()));
-            }
-        }
-        return result;
+    /**
+     * Get a map of enum values listed in the config like the
+     * {@link #asEnumMap(String, Class, BiFunction)}, but verify that all enum keys
+     * are listed. This can be used for settings where there is appropriate no default
+     * value. Note! This method return {@code null} if the given parameter is not present.
+     */
+    public <T, E extends Enum<E>> Map<E, T> asEnumMapAllKeysRequired(
+        String paramName,
+        Class<E> enumClass,
+        BiFunction<NodeAdapter, String, T> mapper
+    ) {
+        Map<E, T> map = localAsEnumMap(paramName, enumClass, mapper, true);
+        return map.isEmpty() ? null : map;
     }
 
     public <T extends Enum<T>> Set<T> asEnumSet(String paramName, Class<T> enumClass) {
@@ -241,7 +250,7 @@ public class NodeAdapter {
 
     public FeedScopedId asFeedScopedId(String paramName, FeedScopedId defaultValue) {
         if(!exist(paramName)) { return defaultValue; }
-        return FeedScopedId.convertFromString(asText(paramName));
+        return FeedScopedId.parseId(asText(paramName));
     }
 
     public Locale asLocale(String paramName, Locale defaultValue) {
@@ -300,7 +309,11 @@ public class NodeAdapter {
         return uriFromString(paramName, asText(paramName, defaultValue));
     }
 
-    public void logUnusedParameters(Logger log) {
+    /**
+     * Log unused parameters for the entire configuration file/noe tree. Call this method for
+     * thew root adapter for each config file read.
+     */
+    public void logAllUnusedParameters(Logger log) {
         for (String p : unusedParams()) {
             log.warn(
                     "Unexpected config parameter: '{}' in '{}'. Is the spelling correct?",
@@ -310,8 +323,8 @@ public class NodeAdapter {
     }
 
     /**
-     * Unused parameters should be logged for each config file read. This method list all
-     * unused parameters(full path), also nested ones. It uses recursion to get child nodes.
+     * This method list all unused parameters(full path), also nested ones.
+     * It uses recursion to get child nodes.
      */
     private List<String> unusedParams() {
         List<String> unusedParams = new ArrayList<>();
@@ -328,20 +341,8 @@ public class NodeAdapter {
             // Recursive call to get child unused parameters
             unusedParams.addAll(c.unusedParams());
         }
+        unusedParams.sort(String::compareTo);
         return unusedParams;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) { return true; }
-        if (o == null || getClass() != o.getClass()) { return false; }
-        NodeAdapter adapter = (NodeAdapter) o;
-        return source.equals(adapter.source);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(source);
     }
 
 
@@ -353,9 +354,11 @@ public class NodeAdapter {
     }
 
     private String fullPath(String paramName) {
-        return contextPath == null
-                ? paramName
-                : contextPath + "." + paramName;
+        return contextPath == null ? paramName : concatPath(contextPath, paramName);
+    }
+
+    private String concatPath(String a, String b) {
+        return a + "." + b;
     }
 
     private URI uriFromString(String paramName, String text) {
@@ -400,4 +403,27 @@ public class NodeAdapter {
             );
         }
     }
+
+    private <T, E extends Enum<E>> Map<E, T> localAsEnumMap(
+        String paramName, Class<E> enumClass,
+        BiFunction<NodeAdapter, String, T> mapper,
+        boolean requireAllValues
+    ) {
+        NodeAdapter node = path(paramName);
+
+        if(node.isEmpty()) { return Map.of(); }
+
+        Map<E, T> result = new HashMap<>();
+
+        for (E v : enumClass.getEnumConstants()) {
+            if(node.exist(v.name())) {
+                result.put(v, mapper.apply(node, v.name()));
+            }
+            else if(requireAllValues) {
+                throw requiredFieldMissingException(concatPath(paramName, v.name()));
+            }
+        }
+        return result;
+    }
+
 }

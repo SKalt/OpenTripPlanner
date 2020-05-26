@@ -9,15 +9,18 @@ import org.locationtech.jts.index.strtree.STRtree;
 import org.opentripplanner.common.geometry.GeometryUtils;
 import org.opentripplanner.common.geometry.HashGridSpatialIndex;
 import org.opentripplanner.common.geometry.SphericalDistanceLibrary;
-import org.opentripplanner.common.model.GenericLocation;
+import org.opentripplanner.model.GenericLocation;
 import org.opentripplanner.common.model.P2;
 import org.opentripplanner.graph_builder.DataImportIssueStore;
 import org.opentripplanner.graph_builder.linking.SimpleStreetSplitter;
-import org.opentripplanner.routing.core.RoutingRequest;
-import org.opentripplanner.routing.edgetype.SimpleTransfer;
+import org.opentripplanner.routing.api.request.RoutingRequest;
+import org.opentripplanner.routing.api.response.InputField;
+import org.opentripplanner.routing.api.response.RoutingError;
+import org.opentripplanner.routing.api.response.RoutingErrorCode;
 import org.opentripplanner.routing.edgetype.StreetEdge;
 import org.opentripplanner.routing.edgetype.TemporaryFreeEdge;
 import org.opentripplanner.routing.edgetype.TemporaryPartialStreetEdge;
+import org.opentripplanner.routing.error.RoutingValidationException;
 import org.opentripplanner.routing.graph.Edge;
 import org.opentripplanner.routing.graph.Graph;
 import org.opentripplanner.routing.graph.Vertex;
@@ -203,8 +206,6 @@ public class StreetVertexIndex {
              * rasterizing splitting long segments.
              */
             for (Edge e : gv.getOutgoing()) {
-                if (e instanceof SimpleTransfer)
-                    continue;
                 LineString geometry = e.getGeometry();
                 if (geometry == null) {
                     continue;
@@ -327,10 +328,11 @@ public class StreetVertexIndex {
             boolean endVertex
     ) {
         // Check if Stop/StopCollection is found by FeedScopeId
-        Set<Vertex> transitStopVertices =
-                graph.getStopVerticesById(location.stopId);
-        if (transitStopVertices != null) {
-            return transitStopVertices;
+        if(location.stopId != null) {
+            Set<Vertex> transitStopVertices = graph.getStopVerticesById(location.stopId);
+            if (transitStopVertices != null) {
+                return transitStopVertices;
+            }
         }
 
         // Check if coordinate is provided and connect it to graph

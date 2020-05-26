@@ -103,6 +103,9 @@ config key | description | value type | value default | notes
 `fetchElevationUS` | Download US NED elevation data and apply it to the graph | boolean | false |
 `elevationBucket` | If specified, download NED elevation tiles from the given AWS S3 bucket | object | null | provide an object with `accessKey`, `secretKey`, and `bucketName` for AWS S3
 `elevationUnitMultiplier` | Specify a multiplier to convert elevation units from source to meters | double | 1.0 | see [Elevation unit conversion](#elevation-unit-conversion)
+`readCachedElevations` | If true, reads in pre-calculated elevation data. | boolean | true | see [Elevation Data Calculation Optimizations](#elevation-data-calculation-optimizations)
+`writeCachedElevations` | If true, writes the calculated elevation data. | boolean | false | see [Elevation Data Calculation Optimizations](#elevation-data-calculation-optimizations)
+`multiThreadElevationCalculations` | If true, the elevation module will use multi-threading during elevation calculations. | boolean | false | see [Elevation Data Calculation Optimizations](#elevation-data-calculation-optimizations)
 `fares` | A specific fares service to use | object | null | see [fares configuration](#fares-configuration)
 `osmNaming` | A custom OSM namer to use | object | null | see [custom naming](#custom-naming)
 `osmWayPropertySet` | Custom OSM way properties | string | `default` | options: `default`, `norway`, `uk`
@@ -220,6 +223,31 @@ You can configure it as follows in `build-config.json`:
 }
 ```
 
+### Geoid Difference
+
+With some elevation data, the elevation values are specified as relative to the a geoid (irregular estimate of mean sea level). See [issue #2301](https://github.com/opentripplanner/OpenTripPlanner/issues/2301) for detailed discussion of this. In these cases, it is necessary to also add this geoid value onto the elevation value to get the correct result. OTP can automatically calculate these values in one of two ways. 
+
+The first way is to use the geoid difference value that is calculated once at the center of the graph. This value is returned in each trip plan response in the [ElevationMetadata](http://dev.opentripplanner.org/apidoc/1.4.0/json_ElevationMetadata.html) field. Using a single value can be sufficient for smaller OTP deployments, but might result in incorrect values at the edges of larger OTP deployments. If your OTP instance uses this, it is recommended to set a default request value in the `router-config.json` file as follows:
+
+```JSON
+// router-config.json
+{
+    "routingDefaults": {
+        "geoidElevation ": true   
+    }
+}
+```
+
+The second way is to precompute these geoid difference values at a more granular level and include them when calculating elevations for each sampled point along each street edge. In order to speed up calculations, the geoid difference values are calculated and cached using only 2 significant digits of GPS coordinates. This is more than enough detail for most regions of the world and should result in less than one meter of difference in areas that have large changes in geoid difference values. To enable this, include the following in the `build-config.json` file: 
+
+```JSON
+// build-config.json
+{
+  "includeEllipsoidToGeoidDifference": true
+}
+```
+
+If the geoid difference values are precomputed, be careful to not set the routing resource value of `geoidElevation` to true in order to avoid having the graph-wide geoid added again to all elevation values in the relevant street edges in responses.
 
 ### Other raster elevation data
 
@@ -253,6 +281,42 @@ it is possible to define a multiplier that converts the elevation values from so
 {
   // Correct conversation multiplier when source data uses decimetres instead of metres
   "elevationUnitMultiplier": 0.1
+}
+```
+
+### Elevation Data Calculation Optimizations
+
+Calculating elevations on all StreetEdges can take a dramatically long time. In a very large graph build for multiple Northeast US states, the time it took to download the elevation data and calculate all of the elevations took 5,509 seconds (roughly 1.5 hours).
+
+If you are using cloud computing for your OTP instances, it is recommended to create prebuilt images that contain the elevation data you need. This will save time because all of the data won't need to be downloaded.
+
+However, the bulk of the time will still be spent calculating elevations for all of the street edges. Therefore, a further optimization can be done to calculate and save the elevation data during a graph build and then save it for future use.
+
+#### Reusing elevation data from previous builds
+
+In order to write out the precalculated elevation data, add this to your `build-config.json` file:
+
+```JSON
+// build-config.json
+{  
+  "writeCachedElevations": true
+}
+```
+
+After building the graph, a file called `cached_elevations.obj` will be written to the cache directory. By default, this file is not written during graph builds. There is also a graph build parameter called `readCachedElevations` which is set to `true` by default.
+
+In graph builds, the elevation module will attempt to read the `cached_elevations.obj` file from the cache directory. The cache directory defaults to `/var/otp/cache`, but this can be overriden via the CLI argument `--cache <directory>`. For the same graph build for multiple Northeast US states, the time it took with using this predownloaded and precalculated data became 543.7 seconds (roughly 9 minutes).
+
+The cached data is a lookup table where the coordinate sequences of respective street edges are used as keys for calculated data. It is assumed that all of the other input data except for the OpenStreetMap data remains the same between graph builds. Therefore, if the underlying elevation data is changed, or different configuration values for `elevationUnitMultiplier` or `includeEllipsoidToGeoidDifference` are used, then this data becomes invalid and all elevation data should be recalculated. Over time, various edits to OpenStreetMap will cause this cached data to become stale and not include new OSM ways. Therefore, periodic update of this cached data is recommended.
+
+#### Configuring multi-threading during elevation calculations
+
+For unknown reasons that seem to depend on data and machine settings, it might be faster to use a single processor. For this reason, multi-threading of elevation calculations is only done if `multiThreadElevationCalculations` is set to true. To enable multi-threading in the elevation module, add the following to the `build-config.json` file:
+                                                               
+```JSON
+// build-config.json
+{  
+  "multiThreadElevationCalculations": true
 }
 ```
 
@@ -374,8 +438,7 @@ config key | description | value type | value default | notes
 `routingDefaults` | Default routing parameters, which will be applied to every request | object |  | see [routing defaults](#routing-defaults)
 `streetRoutingTimeout` | maximum time limit for street route queries | double | null | units: seconds; see [timeout](#timeout)
 `requestLogFile` | Path to a plain-text file where requests will be logged | string | null | see [logging incoming requests](#logging-incoming-requests)
-`boardTimes` | change boarding times by mode | object | null | see [boarding and alighting times](#boarding-and-alighting-times)
-`alightTimes` | change alighting times by mode | object | null | see [boarding and alighting times](#boarding-and-alighting-times)
+`transit` | Transit tuning parameters | `TransitRoutingConfig` |  | see [Tuning transit routing](#Tuning-transit-routing)
 `updaters` | configure real-time updaters, such as GTFS-realtime feeds | object | null | see [configuring real-time updaters](#configuring-real-time-updaters)
 
 ## Routing defaults
@@ -499,16 +562,14 @@ seconds needed for the boarding and alighting processes in `router-config.json` 
 
 ## Timeout
 
-TODO OTP2 - Clean up this text - there is a timeout for the street search but not for the transit 
-search, it should be limited by the size of the search-window, not a timeout.
-
-Path searches can sometimes take a long time to complete, especially certain problematic cases that
-have yet to be optimized. Often the street part of the routing can take a long time if searching
-very long distances. You can set the street routing timeout to avoid tying up server resources on
-pointless searches and ensure that your users receive a timely response. You can also limit the max
-distance to search for WALK, BIKE and CAR. When a search times out, a WARN level log entry is made
-with information that can help identify problematic searches and improve our routing methods. The
-simplest timeout option is:
+In OTP1 path searches sometimes toke a long time to complete. With the new Raptor algorithm this not
+the case anymore. The street part of the routing may still take a long time if searching very long
+distances. You can set the street routing timeout to avoid tying up server resources on pointless
+searches and ensure that your users receive a timely response. You can also limit the max distance
+to search for WALK, BIKE and CAR. When a search times out, a WARN level log entry is made with
+information that can help identify problematic searches and improve our routing methods. There are 
+no timeouts for the transit part of the routing search, instead configure a reasonable dynamic 
+search-window. To set the street routing timeout use the following config:
 
 ```JSON
 // router-config.json
@@ -517,8 +578,7 @@ simplest timeout option is:
 }
 ```
 
-This specifies a single timeout in (optionally fractional) seconds. Searching is aborted after this many seconds and any
-paths already found are returned to the client. 
+This specifies a timeout in (optionally fractional) seconds. The search abort after this many seconds and any paths found are returned to the client. 
 
 ## Logging incoming requests
 
@@ -537,7 +597,7 @@ Each line in the resulting log file will look like this:
 
 `2016-04-19T18:23:13.486 0:0:0:0:0:0:0:1 ARRIVE 2016-04-07T00:17 WALK,BUS,CABLE_CAR,TRANSIT,BUSISH 45.559737193889966 -122.64999389648438 45.525592487765635 -122.39044189453124 6095 3 5864 3 6215 3`
 
-The fields are separated by whitespace and are (in order):
+The fields separated by whitespace are (in order):
 
 1. Date and time the request was received
 2. IP address of the user
@@ -549,6 +609,99 @@ The fields are separated by whitespace and are (in order):
 
 Finally, for each itinerary returned to the user, there is a travel duration in seconds and the number of transit vehicles used in that itinerary.
 
+
+## Tuning transit routing
+
+Some of these parameters for tuning transit routing is only available through configuration and cannot be set in the routing request. These parameters work together with the default routing request and the actual routing request.
+
+### transit.maxNumberOfTransfers
+This parameter is used to allocate enough memory space for Raptor. Set it to the maximum number of transfers for any given itinerary expected to be found within the entire transit network.
+
+**Type:** `int`  **Default value:** 12
+
+### transit.scheduledTripBinarySearchThreshold
+The threshold is used to determine when to perform a binary trip schedule search to reduce the number of trips departure time lookups and comparisons. When testing with data from Entur and all of Norway as a Graph, the optimal value was around 50. Changing this may improve the performance with just a few percent.
+
+**Type:** `int`  **Default value:** 50
+
+### transit.iterationDepartureStepInSeconds
+Step for departure times between each RangeRaptor iterations. A transit network usually uses minute resolution for its depature and arrival times. To match that, set this variable to 60 seconds.
+
+**Type:** `int`  **Default value:** 60
+
+### transit.searchThreadPoolSize
+Split a travel search in smaller jobs and run them in parallel to improve performance. Use this parameter to set the total number of executable threads available across all searches. Multiple searches can run in parallel - this parameter have no effect with regard to that. If 0, no extra threads are started and the search is done in one thread.
+
+**Type:** `int`  **Default value:** 0
+
+### transit.dynamicSearchWindow
+The dynamic search window coefficients used to calculate the EDT(earliest-departure-time), LAT(latest-arrival-time) and SW(raptor-search-window) using heuristics.
+
+#### transit.dynamicSearchWindow.minTripTimeCoefficient
+The coefficient to multiply with minimum travel time found using a heuristic search. This 
+ value is added to the `minWinTimeMinutes`. A value between `0.0` to `3.0` is expected to give 
+ ok results.
+
+**Type:** `double`  **Default value:** 0.3
+
+
+#### transit.dynamicSearchWindow.minWinTimeMinutes
+The constant minimum number of minutes for a raptor search window. Use a value between 20-180 minutes in a normal deployment.
+**Type:** `int`  **Default value:** 40
+
+#### transit.dynamicSearchWindow.maxWinTimeMinutes
+Set an upper limit to the calculation of the dynamic search window to prevent exceptionable cases to cause very long search windows. Long search windows consumes a lot of resources and may take a long time. Use this parameter to tune the desired maximum search time.
+
+**Type:** `int`  **Default value:** 180 (3 timer) 
+
+#### transit.dynamicSearchWindow.stepMinutes
+he search window is rounded of to the closest multiplication of N minutes. If N=10 minutes, the search-window can be 10, 20, 30 ... minutes. It the computed search-window is 5 minutes and 17 seconds it will be rounded up to 10 minutes.
+
+**Type:** `int`  **Default value:** 10 
+
+
+### transit.stopTransferCost.<TransferPriority>
+Use this to set a stop transfer cost for the given `TransferPriority`. The cost is applied to boarding and alighting at all stops. All stops have a transfer cost priority set, the default is `ALLOWED`. The `stopTransferCost` parameter is otional, but if listed all values must be set. 
+
+This _cost_ is in addition to other costs like `boardCost` and indirect cost from waiting (board-/alight-/transfer slack). You should account for this when you tune the routing search parameters.
+
+If not set the `stopTransferCost` is ignored. This is only available for NeTEx imported Stops.
+
+**Key type:** DISCOURAGED, ALLOWED, RECOMMENDED or PREFERRED 
+
+**Value Type:**  `int` 
+
+**Value Unit:** Scalar, equvivalent to one second of transit. 
+
+**Value Range:** `[0 .. 100,000]`
+
+**All key/value pairs are required if specified.** 
+
+
+### Transit example section from router-config.json
+```
+{
+    transit: {
+        maxNumberOfTransfers: 12,
+        scheduledTripBinarySearchThreshold: 50,
+        iterationDepartureStepInSeconds: 60,
+        searchThreadPoolSize: 0,
+        dynamicSearchWindow: {
+            minTripTimeCoefficient: 0.4,
+            minTripTimeCoefficient: 0.3,
+            minTimeMinutes: 30,
+            maxLengthMinutes : 360,
+            stepMinutes: 10
+        },
+        stopTransferCost: {
+            DISCOURAGED: 72000,
+            ALLOWED:       150,
+            RECOMMENDED:    60,
+            PREFERRED:       0
+        }
+    }
+}
+```
 
 ## Real-time data
 
@@ -612,7 +765,7 @@ connect to a network resource is the `url` field.
 // router-config.json
 {
     // Routing defaults are any public field or setter in the Java class
-    // org.opentripplanner.routing.core.RoutingRequest
+    // org.opentripplanner.routing.api.request.RoutingRequest
     "routingDefaults": {
         "numItineraries": 6,
         "walkSpeed": 2.0,

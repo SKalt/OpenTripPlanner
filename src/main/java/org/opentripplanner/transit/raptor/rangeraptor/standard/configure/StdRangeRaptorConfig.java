@@ -3,7 +3,7 @@ package org.opentripplanner.transit.raptor.rangeraptor.standard.configure;
 import org.opentripplanner.transit.raptor.api.transit.RaptorTripSchedule;
 import org.opentripplanner.transit.raptor.api.view.Heuristics;
 import org.opentripplanner.transit.raptor.api.view.Worker;
-import org.opentripplanner.transit.raptor.rangeraptor.TransitRoutingStrategy;
+import org.opentripplanner.transit.raptor.rangeraptor.RoutingStrategy;
 import org.opentripplanner.transit.raptor.rangeraptor.WorkerState;
 import org.opentripplanner.transit.raptor.rangeraptor.path.DestinationArrivalPaths;
 import org.opentripplanner.transit.raptor.rangeraptor.path.configure.PathConfig;
@@ -60,7 +60,7 @@ public class StdRangeRaptorConfig<T extends RaptorTripSchedule> {
      * worker, if not the heuristic can not be added to the worker lifecycle and fails.
      */
     public HeuristicSearch<T> createHeuristicSearch(
-            BiFunction<WorkerState<T>, TransitRoutingStrategy<T>, Worker<T>> createWorker
+            BiFunction<WorkerState<T>, RoutingStrategy<T>, Worker<T>> createWorker
     ) {
         StdRangeRaptorWorkerState<T> state = createState();
         Heuristics heuristics = createHeuristicsAdapter();
@@ -68,7 +68,7 @@ public class StdRangeRaptorConfig<T extends RaptorTripSchedule> {
     }
 
     public Worker<T> createSearch(
-            BiFunction<WorkerState<T>, TransitRoutingStrategy<T>, Worker<T>> createWorker
+            BiFunction<WorkerState<T>, RoutingStrategy<T>, Worker<T>> createWorker
     ) {
         StdRangeRaptorWorkerState<T> state = createState();
         return createWorker.apply(state, createWorkerStrategy(state));
@@ -90,15 +90,14 @@ public class StdRangeRaptorConfig<T extends RaptorTripSchedule> {
         throw new IllegalArgumentException(ctx.profile().toString());
     }
 
-    private TransitRoutingStrategy<T> createWorkerStrategy(StdWorkerState<T> state) {
-
+    private RoutingStrategy<T> createWorkerStrategy(StdWorkerState<T> state) {
         switch (ctx.profile()) {
             case STANDARD:
             case BEST_TIME:
-                return new StdTransitWorker<>(state, ctx.calculator());
+                return new StdTransitWorker<>(state, ctx.slackProvider(), ctx.calculator());
             case NO_WAIT_STD:
             case NO_WAIT_BEST_TIME:
-                return new NoWaitTransitWorker<>(state, ctx.calculator());
+                return new NoWaitTransitWorker<>(state, ctx.slackProvider(), ctx.calculator());
         }
         throw new IllegalArgumentException(ctx.profile().toString());
     }
@@ -170,7 +169,7 @@ public class StdRangeRaptorConfig<T extends RaptorTripSchedule> {
 
     private StopsCursor<T> stopsCursor() {
         // Always create new cursors
-        return new StopsCursor<>(stops(), ctx.calculator());
+        return new StopsCursor<>(stops(), ctx.calculator(), ctx.boardSlackProvider());
     }
 
     private DestinationArrivalPaths<T> destinationArrivalPaths() {

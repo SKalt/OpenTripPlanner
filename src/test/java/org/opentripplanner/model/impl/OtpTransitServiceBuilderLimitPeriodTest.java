@@ -7,12 +7,14 @@ import org.opentripplanner.model.Route;
 import org.opentripplanner.model.Stop;
 import org.opentripplanner.model.StopPattern;
 import org.opentripplanner.model.StopTime;
+import org.opentripplanner.model.TransitMode;
 import org.opentripplanner.model.Trip;
 import org.opentripplanner.model.TripPattern;
 import org.opentripplanner.model.calendar.ServiceCalendar;
 import org.opentripplanner.model.calendar.ServiceCalendarDate;
 import org.opentripplanner.model.calendar.ServiceDate;
 import org.opentripplanner.model.calendar.ServiceDateInterval;
+import org.opentripplanner.routing.core.TraverseMode;
 import org.opentripplanner.routing.trippattern.Deduplicator;
 import org.opentripplanner.routing.trippattern.TripTimes;
 
@@ -44,8 +46,8 @@ public class OtpTransitServiceBuilderLimitPeriodTest {
     private static final FeedScopedId SERVICE_C_OUT = new FeedScopedId(FEED_ID, "CalSrvOut");
     private static final FeedScopedId SERVICE_D_OUT = new FeedScopedId(FEED_ID, "CalSrvDOut");
 
-    private static final Stop STOP_1 = new Stop(new FeedScopedId(FEED_ID, "Stop-1"));
-    private static final Stop STOP_2 = new Stop(new FeedScopedId(FEED_ID, "Stop-2"));
+    private static final Stop STOP_1 = Stop.stopForTest("Stop-1", 0.0, 0.0);
+    private static final Stop STOP_2 = Stop.stopForTest("Stop-2", 0.0,0.0);
 
     private static final Deduplicator DEDUPLICATOR = new Deduplicator();
 
@@ -91,6 +93,7 @@ public class OtpTransitServiceBuilderLimitPeriodTest {
         // Add Route
         route.setId(newId());
         route.setType(3);
+        route.setMode(TransitMode.BUS);
         subject.getRoutes().add(route);
 
         // Add trips; one for each day and calendar

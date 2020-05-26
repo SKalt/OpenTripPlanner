@@ -137,7 +137,7 @@ public class Leg {
     * For transit legs, the ID of the transit agency that operates the service used for this leg.
     * For non-transit legs, null.
     */
-   public String agencyId = null;
+   public FeedScopedId agencyId = null;
 
    /**
     * For transit legs, the ID of the trip.
@@ -149,6 +149,8 @@ public class Leg {
     * For transit legs, the service date of the trip.
     * For non-transit legs, null.
     */
+   // TODO OTP2 - This should not be a String? What is this used for? Is it the actual date or the
+   //           - Service date?
    public String serviceDate = null;
 
     /**
@@ -257,7 +259,7 @@ public class Leg {
     /** Should be used for debug logging only */
     @Override
     public String toString() {
-        return new ToStringBuilder(Leg.class)
+        return ToStringBuilder.of(Leg.class)
                 .addObj("from", from)
                 .addObj("to", to)
                 .addCalTime("startTime", startTime)
@@ -283,7 +285,7 @@ public class Leg {
                 .addStr("tripShortName", tripShortName)
                 .addStr("tripBlockId", tripBlockId)
                 .addStr("headsign", headsign)
-                .addStr("agencyId", agencyId)
+                .addObj("agencyId", agencyId)
                 .addObj("tripId", tripId)
                 .addStr("serviceDate", serviceDate)
                 .addStr("routeBrandingUrl", routeBrandingUrl)

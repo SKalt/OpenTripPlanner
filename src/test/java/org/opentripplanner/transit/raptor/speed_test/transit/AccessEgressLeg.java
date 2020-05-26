@@ -1,9 +1,9 @@
 package org.opentripplanner.transit.raptor.speed_test.transit;
 
-import org.opentripplanner.transit.raptor.api.transit.TransferLeg;
+import org.opentripplanner.transit.raptor.api.transit.RaptorTransfer;
 import org.opentripplanner.transit.raptor.util.TimeUtils;
 
-public class AccessEgressLeg implements TransferLeg {
+public class AccessEgressLeg implements RaptorTransfer {
     private final int stop, durationInSeconds;
 
     public AccessEgressLeg(int stop, int durationInSeconds) {
@@ -14,6 +14,16 @@ public class AccessEgressLeg implements TransferLeg {
     @Override
     public int stop() {
         return stop;
+    }
+
+    @Override
+    public int earliestDepartureTime(int requestedDepartureTime) {
+        return requestedDepartureTime;
+    }
+
+    @Override
+    public int latestArrivalTime(int requestedArrivalTime) {
+        return requestedArrivalTime;
     }
 
     @Override

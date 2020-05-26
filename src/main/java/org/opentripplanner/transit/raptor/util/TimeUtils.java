@@ -1,6 +1,7 @@
 package org.opentripplanner.transit.raptor.util;
 
 
+import java.time.Duration;
 import java.util.Calendar;
 
 
@@ -41,12 +42,23 @@ public class TimeUtils {
         return hm2time(hh, mm);
     }
 
-    public static String timeToStrCompact(int time) {
-        return timeToStrCompact(time, -1);
+    /** pares time of format hh:mm:ss. */
+    public static int parseTimeLong(String hhmmss, int defaultValue) {
+        String[] tokens = hhmmss.split(":");
+        if(tokens.length != 3) {
+            return defaultValue;
+        }
+
+        int hh = Integer.parseInt(tokens[0]);
+        int mm = Integer.parseInt(tokens[1]);
+        int ss = Integer.parseInt(tokens[2]);
+
+        return hms2time(hh, mm, ss);
     }
 
-    public static String durationToStr(int timeSeconds) {
-        return timeStr(timeSeconds, -1, FormatType.DURATION);
+
+    public static String timeToStrCompact(int time) {
+        return timeToStrCompact(time, -1);
     }
 
     public static String timeToStrCompact(int time, int notSetValue) {
@@ -57,7 +69,19 @@ public class TimeUtils {
         return timeStr(time, FormatType.COMPACT);
     }
 
-    public static String timeMsToStrInSec(long timeMs) {
+    public static String durationToStr(Duration duration) {
+        return durationToStr((int)duration.toSeconds());
+    }
+
+    public static String durationToStr(int timeSeconds) {
+        return durationToStr(timeSeconds, NOT_SET);
+    }
+
+    public static String durationToStr(int timeSeconds, int notSetValue) {
+        return timeStr(timeSeconds, notSetValue, FormatType.DURATION);
+    }
+
+    public static String msToSecondsStr(long timeMs) {
         if(timeMs == 0) { return "0 seconds"; }
         if(timeMs == 1000) { return "1 second"; }
         if(timeMs < 100) { return String.format ("%.3f seconds",  timeMs/1000.0); }
@@ -79,7 +103,7 @@ public class TimeUtils {
     }
 
     public static String timeToStrShort(int time) {
-        return timeStr(time, -1, FormatType.SHORT);
+        return timeStr(time, NOT_SET, FormatType.SHORT);
     }
 
     public static String timeToStrShort(Calendar time) {
@@ -127,12 +151,14 @@ public class TimeUtils {
         return timeStr(false, hour, min, sec, formatType);
     }
 
-    private static String timeStr(boolean sign, int hour, int min, int sec, FormatType formatType) {
+    private static String timeStr(
+            boolean sign, int hours, int min, int sec, FormatType formatType
+    ) {
         switch (formatType) {
-            case LONG: return sign(sign, timeStrLong(hour, min, sec));
-            case SHORT: return sign(sign, timeStrShort(hour, min));
-            case DURATION: return sign(sign, timeStrDuration(hour, min, sec));
-            default: return sign(sign, timeStrCompact(hour, min, sec));
+            case LONG: return sign(sign, timeStrLong(hours, min, sec));
+            case SHORT: return sign(sign, timeStrShort(hours, min));
+            case DURATION: return sign(sign, timeStrDuration(hours, min, sec));
+            default: return sign(sign, timeStrCompact(hours, min, sec));
         }
     }
 
@@ -141,8 +167,8 @@ public class TimeUtils {
     }
 
     private static String timeStrCompact(int hour, int min, int sec) {
-        return hour == 0
-                ? String.format("%d:%02d", min, sec)
+        return sec == 0
+                ? String.format("%d:%02d", hour, min)
                 : String.format("%d:%02d:%02d", hour, min, sec);
     }
 
@@ -154,11 +180,16 @@ public class TimeUtils {
         return String.format("%02d:%02d", hour, min);
     }
 
-    private static String timeStrDuration(int hour, int min, int sec) {
+    /** Examples: "3d4h3m4s", "3m", "59s", "1h3s" */
+    private static String timeStrDuration(int hours, int min, int sec) {
+        int days = hours/24;
+        hours = hours % 24;
         String buf = "";
-        if(hour != 0) { buf += hour + "h"; }
+
+        if(days != 0) { buf += days + "d"; }
+        if(hours != 0) { buf += hours + "h"; }
         if(min != 0) { buf += min + "m"; }
         if(sec != 0) { buf += sec + "s"; }
-        return buf;
+        return buf.isBlank() ? "0s" : buf;
     }
 }

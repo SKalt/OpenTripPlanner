@@ -1,9 +1,10 @@
 package org.opentripplanner.model.impl;
 
 import com.google.common.collect.ArrayListMultimap;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Multimap;
 import org.opentripplanner.model.Agency;
+import org.opentripplanner.model.BoardingArea;
+import org.opentripplanner.model.Entrance;
 import org.opentripplanner.model.FareAttribute;
 import org.opentripplanner.model.FareRule;
 import org.opentripplanner.model.FeedInfo;
@@ -15,6 +16,7 @@ import org.opentripplanner.model.Notice;
 import org.opentripplanner.model.Operator;
 import org.opentripplanner.model.OtpTransitService;
 import org.opentripplanner.model.Pathway;
+import org.opentripplanner.model.PathwayNode;
 import org.opentripplanner.model.Route;
 import org.opentripplanner.model.ShapePoint;
 import org.opentripplanner.model.Station;
@@ -49,7 +51,7 @@ import static org.opentripplanner.model.impl.GenerateMissingIds.generateNoneExis
 public class OtpTransitServiceBuilder {
     private static final Logger LOG = LoggerFactory.getLogger(OtpTransitServiceBuilder.class);
 
-    private final EntityById<String, Agency> agenciesById = new EntityById<>();
+    private final EntityById<FeedScopedId, Agency> agenciesById = new EntityById<>();
 
     private final List<ServiceCalendarDate> calendarDates = new ArrayList<>();
 
@@ -81,6 +83,12 @@ public class OtpTransitServiceBuilder {
 
     private final EntityById<FeedScopedId, Stop> stopsById = new EntityById<>();
 
+    private final EntityById<FeedScopedId, Entrance> entrancesById = new EntityById<>();
+
+    private final EntityById<FeedScopedId, PathwayNode> pathwayNodesById = new EntityById<>();
+
+    private final EntityById<FeedScopedId, BoardingArea> boardingAreasById = new EntityById<>();
+
     private final TripStopTimes stopTimesByTrip = new TripStopTimes();
 
     private final List<Transfer> transfers = new ArrayList<>();
@@ -96,7 +104,7 @@ public class OtpTransitServiceBuilder {
 
     /* Accessors */
 
-    public EntityById<String, Agency> getAgenciesById() {
+    public EntityById<FeedScopedId, Agency> getAgenciesById() {
         return agenciesById;
     }
 
@@ -164,6 +172,18 @@ public class OtpTransitServiceBuilder {
         return stopsById;
     }
 
+    public EntityById<FeedScopedId, Entrance> getEntrances() {
+        return entrancesById;
+    }
+
+    public EntityById<FeedScopedId, PathwayNode> getPathwayNodes() {
+        return pathwayNodesById;
+    }
+
+    public EntityById<FeedScopedId, BoardingArea> getBoardingAreas() {
+        return boardingAreasById;
+    }
+
     public TripStopTimes getStopTimesSortedByTrip() {
         return stopTimesByTrip;
     }
@@ -206,18 +226,6 @@ public class OtpTransitServiceBuilder {
     public OtpTransitService build() {
         generateNoneExistentIds(feedInfos);
         return new OtpTransitServiceImpl(this);
-    }
-
-    /**
-     * For entities with mutable ids the internal map becomes invalid after the ids are changed.
-     * Calling this method fixes this problem by reindexing the maps.
-     */
-    public void regenerateIndexes() {
-        this.agenciesById.reindex();
-        this.tripsById.reindex();
-        this.stopsById.reindex();
-        this.routesById.reindex();
-        this.stopTimesByTrip.reindex();
     }
 
     /**

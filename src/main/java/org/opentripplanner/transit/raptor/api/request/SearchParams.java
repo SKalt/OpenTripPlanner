@@ -1,9 +1,8 @@
 package org.opentripplanner.transit.raptor.api.request;
 
-import org.opentripplanner.transit.raptor.api.transit.TransferLeg;
+import org.opentripplanner.transit.raptor.api.transit.RaptorTransfer;
 import org.opentripplanner.transit.raptor.util.TimeUtils;
 
-import java.util.BitSet;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Objects;
@@ -41,10 +40,8 @@ public class SearchParams {
     private final int maxNumberOfTransfers;
     private final double relaxCostAtDestination;
     private final boolean timetableEnabled;
-    private final boolean allowWaitingBetweenAccessAndTransit;
-    private final BitSet stopFilter;
-    private final Collection<TransferLeg> accessLegs;
-    private final Collection<TransferLeg> egressLegs;
+    private final Collection<RaptorTransfer> accessLegs;
+    private final Collection<RaptorTransfer> egressLegs;
 
     /**
      * Default values is defined in the default constructor.
@@ -58,8 +55,6 @@ public class SearchParams {
         maxNumberOfTransfers = NOT_SET;
         relaxCostAtDestination = NOT_SET;
         timetableEnabled = false;
-        allowWaitingBetweenAccessAndTransit = true;
-        stopFilter = null;
         accessLegs = Collections.emptyList();
         egressLegs = Collections.emptyList();
     }
@@ -73,8 +68,6 @@ public class SearchParams {
         this.maxNumberOfTransfers = builder.maxNumberOfTransfers();
         this.relaxCostAtDestination = builder.relaxCostAtDestination();
         this.timetableEnabled = builder.timetableEnabled();
-        this.allowWaitingBetweenAccessAndTransit = builder.allowWaitingBetweenAccessAndTransit();
-        this.stopFilter = builder.stopFilter();
         this.accessLegs = java.util.List.copyOf(builder.accessLegs());
         this.egressLegs = java.util.List.copyOf(builder.egressLegs());
     }
@@ -218,54 +211,23 @@ public class SearchParams {
     }
 
     /**
-     * Allow a Journey to depart outside the search window. This parameter allow the first
-     * Range Raptor iteration to "wait" at the first stop (access stop) to board the first
-     * trip. The "access leg" is time-shifted, and the origin departure time will be outside
-     * the search window.
-     * <p/>
-     * Setting this parameter to "FALSE" make it possible to concatenate the results from two
-     * sequential searches without getting duplicate results. For example you can search form
-     * 08:00 to 12:00, and from 12:00 to 16:00 in parallel and merge the result. The result will
-     * not have any duplicates, but there is no guarantee that the set will be pareto optimal.
-     * There can be journeys in one set that dominates journeys in the other set.
-     * <p/>
-     * The default value is TRUE.
-     */
-    public boolean allowWaitingBetweenAccessAndTransit() {
-        return allowWaitingBetweenAccessAndTransit;
-    }
-
-    /**
-     * Restrict the search to a limited set of stops. Range Raptor will check the
-     * provided stop filter every time it arrive at a stop, dropping all arrivals
-     * (and paths) during the search.
-     * <p/>
-     * Set bit n to TRUE to enable stop at index n.
-     * </p>
-     * The default is {@code null}
-     */
-    public BitSet stopFilter() {
-        return stopFilter;
-    }
-
-    /**
      * Times to access each transit stop using the street network in seconds.
      * <p/>
      * Required, at least one access leg must exist.
      */
-    public Collection<TransferLeg> accessLegs() {
+    public Collection<RaptorTransfer> accessLegs() {
         return accessLegs;
     }
 
     /**
      * List of all possible egress stops and time to reach destination in seconds.
      * <p>
-     * NOTE! The {@link TransferLeg#stop()} is the stop where the egress leg
+     * NOTE! The {@link RaptorTransfer#stop()} is the stop where the egress leg
      * start, NOT the destination - think of it as a reversed leg.
      * <p/>
      * Required, at least one egress leg must exist.
      */
-    public Collection<TransferLeg> egressLegs() {
+    public Collection<RaptorTransfer> egressLegs() {
         return egressLegs;
     }
 

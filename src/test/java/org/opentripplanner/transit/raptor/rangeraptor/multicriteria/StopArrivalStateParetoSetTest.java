@@ -2,7 +2,7 @@ package org.opentripplanner.transit.raptor.rangeraptor.multicriteria;
 
 import org.junit.Assert;
 import org.junit.Test;
-import org.opentripplanner.transit.raptor.api.TestLeg;
+import org.opentripplanner.transit.raptor._shared.TestLeg;
 import org.opentripplanner.transit.raptor.api.transit.RaptorTripSchedule;
 import org.opentripplanner.transit.raptor.rangeraptor.multicriteria.arrivals.AbstractStopArrival;
 import org.opentripplanner.transit.raptor.rangeraptor.multicriteria.arrivals.AccessStopArrival;
@@ -22,7 +22,7 @@ public class StopArrivalStateParetoSetTest {
     private static final int ROUND_2 = 2;
     private static final int ROUND_3 = 3;
     private static final RaptorTripSchedule ANY_TRIP = null;
-    private static final TransitCalculator CALCULATOR = testDummyCalculator(60, true);
+    private static final TransitCalculator CALCULATOR = testDummyCalculator(true);
 
     // In this test each stop is used to identify the pareto vector - it is just one
     // ParetoSet "subject" with multiple "stops" in it. The stop have no effect on
@@ -38,7 +38,7 @@ public class StopArrivalStateParetoSetTest {
     private static final AbstractStopArrival<RaptorTripSchedule> TRANSFER_R1 = newMcTransitStopState(ROUND_1,998, 10);
     private static final AbstractStopArrival<RaptorTripSchedule> TRANSFER_R2 = newMcTransitStopState(ROUND_2,997, 20);
 
-    private StopArrivalParetoSet<RaptorTripSchedule> subject = new StopArrivalParetoSet<>(null);
+    private final StopArrivalParetoSet<RaptorTripSchedule> subject = new StopArrivalParetoSet<>(null);
 
     @Test
     public void addOneElementToSet() {
@@ -113,7 +113,7 @@ public class StopArrivalStateParetoSetTest {
     }
 
     private static AccessStopArrival<RaptorTripSchedule> newAccessStopState(int stop, int accessDurationInSeconds) {
-        return new AccessStopArrival<>(stop, A_TIME, accessDurationInSeconds, ANY, CALCULATOR);
+        return new AccessStopArrival<>(stop, A_TIME, accessDurationInSeconds, ANY, null);
     }
 
     private static TransitStopArrival<RaptorTripSchedule> newMcTransitStopState(int round, int stop, int arrivalTime) {

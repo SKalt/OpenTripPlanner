@@ -6,7 +6,7 @@ import org.opentripplanner.transit.raptor.api.request.SearchParams;
 import org.opentripplanner.transit.raptor.api.request.SearchParamsBuilder;
 import org.opentripplanner.transit.raptor.api.response.RaptorResponse;
 import org.opentripplanner.transit.raptor.api.transit.RaptorTripSchedule;
-import org.opentripplanner.transit.raptor.api.transit.TransitDataProvider;
+import org.opentripplanner.transit.raptor.api.transit.RaptorTransitDataProvider;
 import org.opentripplanner.transit.raptor.api.view.Heuristics;
 import org.opentripplanner.transit.raptor.api.view.Worker;
 import org.opentripplanner.transit.raptor.rangeraptor.configure.RaptorConfig;
@@ -14,7 +14,6 @@ import org.opentripplanner.util.OtpAppException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.BitSet;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -42,7 +41,7 @@ public class RangRaptorDynamicSearch<T extends RaptorTripSchedule> {
     private static final Logger LOG = LoggerFactory.getLogger(RangRaptorDynamicSearch.class);
 
     private final RaptorConfig<T> config;
-    private final TransitDataProvider<T> transitData;
+    private final RaptorTransitDataProvider<T> transitData;
     private final RaptorRequest<T> originalRequest;
     private final RaptorSearchWindowCalculator dynamicSearchParamsCalculator;
 
@@ -51,7 +50,7 @@ public class RangRaptorDynamicSearch<T extends RaptorTripSchedule> {
 
     public RangRaptorDynamicSearch(
             RaptorConfig<T> config,
-            TransitDataProvider<T> transitData,
+            RaptorTransitDataProvider<T> transitData,
             RaptorRequest<T> originalRequest
     ) {
         this.config = config;
@@ -72,7 +71,6 @@ public class RangRaptorDynamicSearch<T extends RaptorTripSchedule> {
            runHeuristics();
 
             RaptorRequest<T> mcRequest = originalRequest;
-            mcRequest = addStopFilterFromHeuristics(mcRequest);
             mcRequest = mcRequestWithDynamicSearchParams(mcRequest);
 
             return createAndRunWorker(mcRequest);
@@ -246,25 +244,6 @@ public class RangRaptorDynamicSearch<T extends RaptorTripSchedule> {
         // multi-criteria search, it does not have much effect on the performance - we only risk
         // loosing optimal results.
         return builder.build();
-    }
-
-    /**
-     * Use the TRANSFERS_STOP_FILTER to prune stops for. This method creates the stopFilter
-     * BitSet and add it to the request - ready to be used by the next search.
-     */
-    private RaptorRequest<T> addStopFilterFromHeuristics(RaptorRequest<T> request) {
-        if (!request.useTransfersStopFilter()) { return request; }
-        // If not a mc-search
-        if (!fwdHeuristics.isEnabled() || !revHeuristics.isEnabled()) { return request; }
-
-        int nAddTransfares = originalRequest.searchParams().numberOfAdditionalTransfers();
-
-        BitSet stopFilter = fwdHeuristics
-                .search()
-                .stopFilter(revHeuristics.search(), nAddTransfares);
-
-        LOG.debug("RangeRaptor - Stop Filter using heuristics enabled.");
-        return request.mutate().searchParams().stopFilter(stopFilter).build();
     }
 
     private void calculateDynamicSearchParametersFromHeuristics(Heuristics heuristics) {

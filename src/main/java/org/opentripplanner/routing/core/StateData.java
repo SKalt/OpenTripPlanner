@@ -1,5 +1,7 @@
 package org.opentripplanner.routing.core;
 
+import org.opentripplanner.routing.api.request.RoutingRequest;
+
 import java.util.Set;
 
 /**
@@ -12,11 +14,17 @@ public class StateData implements Cloneable {
     // the time at which the search started
     protected long startTime;
 
+    // TODO OTP2 Many of these could be replaced by a more generic state machine implementation
+
     protected boolean usingRentedBike;
 
     protected boolean carParked;
 
     protected boolean bikeParked;
+
+    protected boolean hasUsedRentedBike;
+
+    protected CarPickupState carPickupState;
 
     protected RoutingRequest opt;
 
@@ -35,7 +43,7 @@ public class StateData implements Cloneable {
     protected boolean enteredNoThroughTrafficArea;
 
     public StateData(RoutingRequest options) {
-        TraverseModeSet modes = options.modes;
+        TraverseModeSet modes = options.streetSubRequestModes;
         if (modes.getCar())
             nonTransitMode = TraverseMode.CAR;
         else if (modes.getWalk())

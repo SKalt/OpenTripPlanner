@@ -1,17 +1,21 @@
 package org.opentripplanner.transit.raptor.speed_test;
 
+import org.opentripplanner.common.MavenVersion;
 import org.opentripplanner.datastore.OtpDataStore;
 import org.opentripplanner.routing.algorithm.raptor.transit.TransitLayer;
 import org.opentripplanner.routing.algorithm.raptor.transit.TripSchedule;
 import org.opentripplanner.routing.algorithm.raptor.transit.mappers.TransitLayerMapper;
 import org.opentripplanner.routing.algorithm.raptor.transit.request.RaptorRoutingRequestTransitData;
 import org.opentripplanner.routing.graph.Graph;
+import org.opentripplanner.routing.graph.SerializedGraphObject;
+import org.opentripplanner.standalone.OtpStartupInfo;
 import org.opentripplanner.transit.raptor.RaptorService;
 import org.opentripplanner.transit.raptor.api.request.RaptorRequest;
 import org.opentripplanner.transit.raptor.api.response.RaptorResponse;
-import org.opentripplanner.transit.raptor.api.transit.TransitDataProvider;
+import org.opentripplanner.transit.raptor.api.transit.RaptorTransitDataProvider;
 import org.opentripplanner.transit.raptor.rangeraptor.configure.RaptorConfig;
-import org.opentripplanner.transit.raptor.speed_test.api.model.TripPlan;
+import org.opentripplanner.transit.raptor.speed_test.model.Itinerary;
+import org.opentripplanner.transit.raptor.speed_test.model.TripPlan;
 import org.opentripplanner.transit.raptor.speed_test.options.SpeedTestCmdLineOpts;
 import org.opentripplanner.transit.raptor.speed_test.options.SpeedTestConfig;
 import org.opentripplanner.transit.raptor.speed_test.testcase.CsvFileIO;
@@ -19,15 +23,14 @@ import org.opentripplanner.transit.raptor.speed_test.testcase.NoResultFound;
 import org.opentripplanner.transit.raptor.speed_test.testcase.TestCase;
 import org.opentripplanner.transit.raptor.speed_test.transit.EgressAccessRouter;
 import org.opentripplanner.transit.raptor.speed_test.transit.ItineraryMapper;
-import org.opentripplanner.transit.raptor.speed_test.transit.ItinerarySet;
 import org.opentripplanner.transit.raptor.util.AvgTimer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.opentripplanner.util.OtpAppException;
 
 import java.io.File;
 import java.lang.ref.WeakReference;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,8 +41,6 @@ import java.util.stream.Collectors;
  * Also demonstrates how to run basic searches without using the graphQL profile routing API.
  */
 public class SpeedTest {
-
-    private static final Logger LOG = LoggerFactory.getLogger(SpeedTest.class);
     private static final boolean TEST_NUM_OF_ADDITIONAL_TRANSFERS = false;
     private static final String TRAVEL_SEARCH_FILENAME = "travelSearch";
 
@@ -73,32 +74,43 @@ public class SpeedTest {
         this.opts = opts;
         this.config = SpeedTestConfig.config(opts.rootDir());
         this.graph = loadGraph(opts.rootDir());
-        this.transitLayer = TransitLayerMapper.map(graph);
+        this.transitLayer = TransitLayerMapper.map(config.transitRoutingParams, graph);
         this.streetRouter = new EgressAccessRouter(graph, transitLayer);
         this.nAdditionalTransfers = opts.numOfExtraTransfers();
-        this.service = new RaptorService<>(new RaptorConfig<>(config.tuningParameters));
+        this.service = new RaptorService<>(new RaptorConfig<>(config.transitRoutingParams));
     }
 
     public static void main(String[] args) throws Exception {
-        // Given the following setup
-        AvgTimer.enableTimers(true);
-        SpeedTestCmdLineOpts opts = new SpeedTestCmdLineOpts(args);
+        try {
+            OtpStartupInfo.logInfo();
+            // Given the following setup
+            AvgTimer.enableTimers(true);
+            SpeedTestCmdLineOpts opts = new SpeedTestCmdLineOpts(args);
 
-        // create a new test
-        SpeedTest speedTest = new SpeedTest(opts);
+            // create a new test
+            SpeedTest speedTest = new SpeedTest(opts);
 
-        // and run it
-        speedTest.runTest();
+            // and run it
+            speedTest.runTest();
+        }
+        catch (OtpAppException ae) {
+            System.err.println(ae.getMessage());
+        }
+        catch (Exception e) {
+            System.err.println(e.getMessage());
+            e.printStackTrace(System.err);
+        }
     }
 
     private static Graph loadGraph(File rootDir) {
-        Graph graph = Graph.load(OtpDataStore.graphFile(rootDir));
+        Graph graph = SerializedGraphObject.load(OtpDataStore.graphFile(rootDir));
+        if(graph == null) { throw new IllegalStateException(); }
         graph.index();
         return graph;
     }
 
     private void runTest() throws Exception {
-        LOG.info("Run Speed Test");
+        System.err.println("Run Speed Test");
         final SpeedTestProfile[] speedTestProfiles = opts.profiles();
         final int nSamples = opts.numberOfTestsSamplesToRun();
 
@@ -111,10 +123,11 @@ public class SpeedTest {
         printProfileStatistics();
 
         service.shutdown();
+        System.err.println("\nSpeedTest done! " + MavenVersion.VERSION.getShortVersionString());
     }
 
     private void runSingleTest(int sample, int nSamples) throws Exception {
-        LOG.info("Run a single test sample (all test cases once)");
+        System.err.println("Run a single test sample (all test cases once)");
 
         CsvFileIO tcIO = new CsvFileIO(opts.rootDir(), TRAVEL_SEARCH_FILENAME);
         List<TestCase> testCases = tcIO.readTestCasesFromFile();
@@ -140,8 +153,10 @@ public class SpeedTest {
         // one time; Hence skip JIT compiler warm-up.
         int samplesPrProfile = opts.numberOfTestsSamplesToRun() / opts.profiles().length;
         if(testCasesToRun.size() > 1 || samplesPrProfile > 1) {
-            // Warm-up JIT compiler
-            runSingleTestCase(tripPlans, testCases.get(1), true);
+            // Warm-up JIT compiler, run the second test-case if it exist to avoid the same
+            // test case from being repeated. If there is just one case, then run it.
+            int index = testCasesToRun.size() == 1 ? 0 : 1;
+            runSingleTestCase(tripPlans, testCases.get(index), true);
         }
 
         ResultPrinter.logSingleTestHeader(routeProfile);
@@ -163,8 +178,8 @@ public class SpeedTest {
     }
 
     private void printProfileStatistics() {
-        ResultPrinter.printProfileResults("Worker: ", workerResults);
-        ResultPrinter.printProfileResults("Total:  ", totalResults);
+        ResultPrinter.printProfileResults("Worker: ", opts.profiles(), workerResults);
+        ResultPrinter.printProfileResults("Total:  ", opts.profiles(), totalResults);
     }
 
     private void initProfileStatistics() {
@@ -222,7 +237,7 @@ public class SpeedTest {
 
 
     public TripPlan route(SpeedTestRequest request) {
-        TransitDataProvider<TripSchedule> transitData;
+        RaptorTransitDataProvider<TripSchedule> transitData;
         RaptorRequest<TripSchedule> rRequest;
         RaptorResponse<TripSchedule> response;
 
@@ -258,7 +273,7 @@ public class SpeedTest {
 
     private void compareHeuristics(SpeedTestRequest heurReq, SpeedTestRequest routeReq) {
         streetRouter.route(heurReq);
-        TransitDataProvider<TripSchedule> transitData = transitData(heurReq);
+        RaptorTransitDataProvider<TripSchedule> transitData = transitData(heurReq);
 
         RaptorRequest<TripSchedule> req1 = heuristicRequest(
                 heuristicProfile, heurReq, streetRouter
@@ -277,7 +292,7 @@ public class SpeedTest {
             int sample,
             int nSamples
     ) {
-        LOG.info("Set up test");
+        System.err.println("Set up test");
         if (opts.compareHeuristics()) {
             heuristicProfile = profilesToRun[0];
             routeProfile = profilesToRun[1 + sample % (profilesToRun.length - 1)];
@@ -327,7 +342,7 @@ public class SpeedTest {
             RaptorResponse<TripSchedule> response,
             EgressAccessRouter streetRouter
     ) {
-        ItinerarySet itineraries = ItineraryMapper.mapItineraries(
+        List<Itinerary> itineraries = ItineraryMapper.mapItineraries(
                 request, response.paths(), streetRouter, transitLayer
         );
 
@@ -343,12 +358,13 @@ public class SpeedTest {
         );
     }
 
-    private TransitDataProvider<TripSchedule> transitData(SpeedTestRequest request) {
+    private RaptorTransitDataProvider<TripSchedule> transitData(SpeedTestRequest request) {
         return new RaptorRoutingRequestTransitData(
                 transitLayer,
                 request.getDepartureDateWithZone().toInstant(),
                 2,
                 request.getTransitModes(),
+                Collections.emptySet(),
                 request.getWalkSpeedMeterPrSecond()
         );
     }

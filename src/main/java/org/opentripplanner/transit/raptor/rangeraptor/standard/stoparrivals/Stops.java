@@ -1,7 +1,7 @@
 package org.opentripplanner.transit.raptor.rangeraptor.standard.stoparrivals;
 
 
-import org.opentripplanner.transit.raptor.api.transit.TransferLeg;
+import org.opentripplanner.transit.raptor.api.transit.RaptorTransfer;
 import org.opentripplanner.transit.raptor.api.transit.RaptorTripSchedule;
 import org.opentripplanner.transit.raptor.rangeraptor.RoundProvider;
 import org.opentripplanner.transit.raptor.rangeraptor.standard.BestNumberOfTransfers;
@@ -31,11 +31,11 @@ public final class Stops<T extends RaptorTripSchedule> implements BestNumberOfTr
      * Setup egress arrivals with a callback witch is notified when a new transit egress arrival happens.
      */
     public void setupEgressStopStates(
-            Iterable<TransferLeg> egressLegs,
+            Iterable<RaptorTransfer> egressLegs,
             Consumer<EgressStopArrivalState<T>> transitArrivalCallback
     ) {
         for (int round = 1; round < stops.length; round++) {
-            for (TransferLeg leg : egressLegs) {
+            for (RaptorTransfer leg : egressLegs) {
                 EgressStopArrivalState<T> state = new EgressStopArrivalState<>(
                         round,
                         leg,
@@ -65,8 +65,8 @@ public final class Stops<T extends RaptorTripSchedule> implements BestNumberOfTr
         return unreachedMinNumberOfTransfers();
     }
 
-    void setInitialTime(int stop, int time, int duration) {
-        findOrCreateStopIndex(round(), stop).setAccessTime(time, duration);
+    void setAccess(int stop, int time, RaptorTransfer access) {
+        findOrCreateStopIndex(round(), stop).asAccessStopArrivalState().setAccess(time, access);
     }
 
     void transitToStop(int stop, int time, int boardStop, int boardTime, T trip, boolean bestTime) {
@@ -82,7 +82,7 @@ public final class Stops<T extends RaptorTripSchedule> implements BestNumberOfTr
     /**
      * Set the time at a transit index iff it is optimal. This sets both the best time and the transfer time
      */
-    void transferToStop(int fromStop, TransferLeg transferLeg, int arrivalTime) {
+    void transferToStop(int fromStop, RaptorTransfer transferLeg, int arrivalTime) {
         int stop = transferLeg.stop();
         StopArrivalState<T> state = findOrCreateStopIndex(round(), stop);
 
@@ -98,7 +98,7 @@ public final class Stops<T extends RaptorTripSchedule> implements BestNumberOfTr
 
     private StopArrivalState<T> findOrCreateStopIndex(final int round, final int stop) {
         if (stops[round][stop] == null) {
-            stops[round][stop] = new StopArrivalState<>();
+            stops[round][stop] = round == 0 ? new AccessStopArrivalState<>() : new StopArrivalState<>();
         }
         return get(round, stop);
     }

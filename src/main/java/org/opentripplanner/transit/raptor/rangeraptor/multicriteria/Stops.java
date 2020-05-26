@@ -3,16 +3,19 @@ package org.opentripplanner.transit.raptor.rangeraptor.multicriteria;
 
 import org.opentripplanner.transit.raptor.api.debug.DebugLogger;
 import org.opentripplanner.transit.raptor.api.transit.IntIterator;
-import org.opentripplanner.transit.raptor.api.transit.TransferLeg;
+import org.opentripplanner.transit.raptor.api.transit.RaptorTransfer;
 import org.opentripplanner.transit.raptor.api.transit.RaptorTripSchedule;
 import org.opentripplanner.transit.raptor.rangeraptor.debug.DebugHandlerFactory;
 import org.opentripplanner.transit.raptor.rangeraptor.multicriteria.arrivals.AbstractStopArrival;
 import org.opentripplanner.transit.raptor.rangeraptor.path.DestinationArrivalPaths;
-import org.opentripplanner.transit.raptor.rangeraptor.transit.CostCalculator;
+import org.opentripplanner.transit.raptor.api.transit.CostCalculator;
 import org.opentripplanner.transit.raptor.util.BitSetIterator;
 
 import java.util.BitSet;
 import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.emptyList;
 
@@ -36,7 +39,7 @@ public final class Stops<T extends RaptorTripSchedule> {
      */
     public Stops(
             int nStops,
-            Collection<TransferLeg> egressLegs,
+            Collection<RaptorTransfer> egressLegs,
             DestinationArrivalPaths<T> paths,
             CostCalculator costCalculator,
             DebugHandlerFactory<T> debugHandlerFactory,
@@ -48,7 +51,12 @@ public final class Stops<T extends RaptorTripSchedule> {
         this.debugHandlerFactory = debugHandlerFactory;
         this.debugStats = new DebugStopArrivalsStatistics(debugLogger);
 
-        for (TransferLeg it : egressLegs) {
+        Collection<Map.Entry<Integer, List<RaptorTransfer>>> groupedEgressLegs = egressLegs
+            .stream()
+            .collect(Collectors.groupingBy(RaptorTransfer::stop))
+            .entrySet();
+
+        for (Map.Entry<Integer, List<RaptorTransfer>> it : groupedEgressLegs) {
             glueTogetherEgressStopWithDestinationArrivals(it, costCalculator, paths);
         }
     }
@@ -104,14 +112,14 @@ public final class Stops<T extends RaptorTripSchedule> {
      * stop, the "glue" make sure new destination arrivals is added to the destination arrivals.
      */
     private void glueTogetherEgressStopWithDestinationArrivals(
-            TransferLeg egressLeg,
+            Map.Entry<Integer, List<RaptorTransfer>> egressLegs,
             CostCalculator costCalculator,
             DestinationArrivalPaths<T> paths
     ) {
-        int stop = egressLeg.stop();
+        int stop = egressLegs.getKey();
         // The factory is creating the actual "glue"
         this.stops[stop] = StopArrivalParetoSet.createEgressStopArrivalSet(
-                egressLeg,
+                egressLegs,
                 costCalculator,
                 paths,
                 debugHandlerFactory

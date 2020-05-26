@@ -7,7 +7,9 @@ import org.opentripplanner.common.model.P2;
 import org.opentripplanner.openstreetmap.BinaryOpenStreetMapProvider;
 import org.opentripplanner.openstreetmap.model.OSMWay;
 import org.opentripplanner.openstreetmap.model.OSMWithTags;
-import org.opentripplanner.routing.core.RoutingRequest;
+import org.opentripplanner.routing.core.TraverseMode;
+import org.opentripplanner.routing.core.TraverseModeSet;
+import org.opentripplanner.routing.api.request.RoutingRequest;
 import org.opentripplanner.routing.edgetype.StreetEdge;
 import org.opentripplanner.routing.edgetype.StreetTraversalPermission;
 import org.opentripplanner.routing.graph.Edge;
@@ -17,6 +19,7 @@ import org.opentripplanner.routing.impl.GraphPathFinder;
 import org.opentripplanner.routing.impl.StreetVertexIndex;
 import org.opentripplanner.routing.spt.GraphPath;
 import org.opentripplanner.routing.vertextype.IntersectionVertex;
+import org.opentripplanner.standalone.config.RouterConfig;
 import org.opentripplanner.standalone.server.Router;
 import org.opentripplanner.util.LocalizedString;
 
@@ -165,10 +168,10 @@ public class TestOpenStreetMapGraphBuilder extends TestCase {
         loader.buildGraph(graph, extra);
         new StreetVertexIndex(graph);
 
-        Router router = new Router(graph);
+        Router router = new Router(graph, RouterConfig.DEFAULT);
         router.startup();
 
-        RoutingRequest request = new RoutingRequest("WALK");
+        RoutingRequest request = new RoutingRequest(new TraverseModeSet(TraverseMode.WALK));
 
         //This are vertices that can be connected only over edges on area (with correct permissions)
         //It tests if it is possible to route over area without visibility calculations

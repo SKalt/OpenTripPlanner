@@ -1,8 +1,7 @@
 # Changelog
 
 ## 2.0 (in progress)
-
-- Add openapi generation (#2998)
+See the [OTP2 Migration Guide](OTP2-MigrationGuide.md) on changes to the REST API.
 - Sandbox for experimental features (#2745)
 - Bugfix for Missing platforms for stops in GTFS import causes a NPE (#2804)
 - Remove extra Djikstra implementations
@@ -29,6 +28,12 @@
 - NeTEx import now supports ServiceLinks (#2951)
 - Also check TripPatterns added by realtime when showing stoptimes for stop (#2954)
 - Copy geometries from previous TripPattern when realtime updates result in a TripPattern being replaced (#2987)
+- Support for the Norwegian language.
+- Update pathways support to official GTFS specification (#2923)
+- Support for XML (de-)serialization is REMOVED from the REST API (#3031)
+- Refactor how to specify access/egress/direct/transit modes in the internal model and the Transmodel API (#3011)
+- Make agency id feed scoped (#3035)
+- Refactor kiss and ride to a more general car pickup mode (#3063)
 
 ## Ported over from the 1.x
 - Add application/x-protobuf to accepted protobuf content-types (#2839)

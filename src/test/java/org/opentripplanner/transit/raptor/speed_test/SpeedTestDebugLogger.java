@@ -54,7 +54,7 @@ class SpeedTestDebugLogger<T extends RaptorTripSchedule> implements DebugLogger 
                 p.egressLeg().fromStop(),
                 TimeUtils.timeToStrLong(p.accessLeg().fromTime()),
                 TimeUtils.timeToStrLong(p.egressLeg().toTime()),
-                timeToStrCompact(p.totalTravelDurationInSeconds()),
+                timeToStrCompact(p.travelDurationInSeconds()),
                 p.cost(),
                 details(e.action().toString(), e.reason(), e.toString())
         );
@@ -102,7 +102,7 @@ class SpeedTestDebugLogger<T extends RaptorTripSchedule> implements DebugLogger 
         buf.sep();
 
         if (a.arrivedByTransit()) {
-            buf.transit(a.departureTime(), a.arrivalTime());
+            buf.transit(a.trip().pattern().modeInfo(), a.departureTime(), a.arrivalTime());
         } else {
             buf.walk(legDuration(a));
         }

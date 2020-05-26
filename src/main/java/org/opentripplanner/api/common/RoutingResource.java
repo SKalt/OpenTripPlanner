@@ -3,15 +3,14 @@ package org.opentripplanner.api.common;
 import org.opentripplanner.api.parameter.QualifiedModeSet;
 import org.opentripplanner.model.FeedScopedId;
 import org.opentripplanner.routing.core.OptimizeType;
-import org.opentripplanner.routing.core.RoutingRequest;
-import org.opentripplanner.routing.request.BannedStopSet;
+import org.opentripplanner.routing.api.request.RoutingRequest;
+import org.opentripplanner.routing.api.request.BannedStopSet;
 import org.opentripplanner.standalone.server.OTPServer;
 import org.opentripplanner.standalone.server.Router;
 import org.opentripplanner.util.ResourceBundleSingleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.PathParam;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 import javax.xml.datatype.DatatypeConfigurationException;
@@ -40,19 +39,6 @@ import java.util.TimeZone;
 public abstract class RoutingResource { 
 
     private static final Logger LOG = LoggerFactory.getLogger(RoutingResource.class);
-
-    /**
-     * The routerId selects between several graphs on the same server. The routerId is pulled from
-     * the path, not the query parameters. However, the class RoutingResource is not annotated with
-     * a path because we don't want it to be instantiated as an endpoint. Instead, the {routerId}
-     * path parameter should be included in the path annotations of all its subclasses.
-     *
-     * @deprecated The support for multiple routers are removed from OTP2.
-     * @see https://github.com/opentripplanner/OpenTripPlanner/issues/2760
-     */
-    @Deprecated
-    @PathParam("routerId") 
-    public String routerId;
 
     /** The start location -- either latitude, longitude pair in degrees or a Vertex
      *  label. For example, <code>40.714476,-74.005966</code> or
@@ -613,7 +599,7 @@ public abstract class RoutingResource {
      * @throws ParameterException when there is a problem interpreting a query parameter
      */
     protected RoutingRequest buildRequest() throws ParameterException {
-        Router router = otpServer.getRouter(routerId);
+        Router router = otpServer.getRouter();
         RoutingRequest request = router.defaultRoutingRequest.clone();
 
         // The routing request should already contain defaults, which are set when it is initialized or in the JSON
@@ -749,22 +735,21 @@ public abstract class RoutingResource {
 
         // The "Least transfers" optimization is accomplished via an increased transfer penalty.
         // See comment on RoutingRequest.transferPentalty.
-        if (transferPenalty != null) request.transferPenalty = transferPenalty;
+        if (transferPenalty != null) request.transferCost = transferPenalty;
         if (optimize == OptimizeType.TRANSFERS) {
             optimize = OptimizeType.QUICK;
-            request.transferPenalty += 1800;
+            request.transferCost += 1800;
         }
 
         if (optimize != null)
             request.setOptimize(optimize);
 
         /* Temporary code to get bike/car parking and renting working. */
-        if (modes != null) {
-            modes.applyToRoutingRequest(request);
-            request.setModes(request.modes);
+        if (modes != null && !modes.qModes.isEmpty()) {
+            request.modes = modes.getRequestModes();
         }
 
-        if (request.allowBikeRental && bikeSpeed == null) {
+        if (request.bikeRental && bikeSpeed == null) {
             //slower bike speed for bike sharing, based on empirical evidence from DC.
             request.bikeSpeed = 4.3;
         }
@@ -775,16 +760,19 @@ public abstract class RoutingResource {
         if (alightSlack != null)
             request.alightSlack = alightSlack;
 
-        if (minTransferTime != null)
-            request.transferSlack = minTransferTime; // TODO rename field in routingrequest
+        if (minTransferTime != null) {
+            int alightAndBoardSlack = request.boardSlack + request.alightSlack;
+            if (alightAndBoardSlack > minTransferTime) {
+                throw new IllegalArgumentException(
+                        "Invalid parameters: 'minTransferTime' must be greater than or equal to board slack plus alight slack"
+                );
+            }
+            request.transferSlack = minTransferTime - alightAndBoardSlack;
+        }
 
         if (nonpreferredTransferPenalty != null)
-            request.nonpreferredTransferPenalty = nonpreferredTransferPenalty;
+            request.nonpreferredTransferCost = nonpreferredTransferPenalty;
 
-        if (request.boardSlack + request.alightSlack > request.transferSlack) {
-            throw new RuntimeException("Invalid parameters: " +
-                    "transfer slack must be greater than or equal to board slack plus alight slack");
-        }
 
         if (maxTransfers != null)
             request.maxTransfers = maxTransfers;
@@ -794,10 +782,10 @@ public abstract class RoutingResource {
         request.useBikeRentalAvailabilityInformation = tripPlannedForNow; // TODO the same thing for GTFS-RT
 
         if (startTransitStopId != null && !startTransitStopId.isEmpty())
-            request.startingTransitStopId = FeedScopedId.convertFromString(startTransitStopId);
+            request.startingTransitStopId = FeedScopedId.parseId(startTransitStopId);
 
         if (startTransitTripId != null && !startTransitTripId.isEmpty())
-            request.startingTransitTripId = FeedScopedId.convertFromString(startTransitTripId);
+            request.startingTransitTripId = FeedScopedId.parseId(startTransitTripId);
 
         if (ignoreRealtimeUpdates != null)
             request.ignoreRealtimeUpdates = ignoreRealtimeUpdates;

@@ -2,7 +2,7 @@ package org.opentripplanner.routing.algorithm.mapping;
 
 import org.locationtech.jts.geom.Coordinate;
 import org.opentripplanner.common.geometry.SphericalDistanceLibrary;
-import org.opentripplanner.common.model.GenericLocation;
+import org.opentripplanner.model.GenericLocation;
 import org.opentripplanner.model.Route;
 import org.opentripplanner.model.Stop;
 import org.opentripplanner.model.Trip;
@@ -13,10 +13,11 @@ import org.opentripplanner.model.plan.Leg;
 import org.opentripplanner.model.plan.Place;
 import org.opentripplanner.model.plan.StopArrival;
 import org.opentripplanner.model.plan.VertexType;
+import org.opentripplanner.routing.algorithm.raptor.transit.AccessEgress;
 import org.opentripplanner.routing.algorithm.raptor.transit.Transfer;
 import org.opentripplanner.routing.algorithm.raptor.transit.TransitLayer;
 import org.opentripplanner.routing.algorithm.raptor.transit.TripSchedule;
-import org.opentripplanner.routing.core.RoutingRequest;
+import org.opentripplanner.routing.api.request.RoutingRequest;
 import org.opentripplanner.routing.core.State;
 import org.opentripplanner.routing.core.StateEditor;
 import org.opentripplanner.routing.core.TraverseMode;
@@ -40,7 +41,6 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.TimeZone;
 
 /**
@@ -57,10 +57,6 @@ public class RaptorPathToItineraryMapper {
 
     private final ZonedDateTime startOfTime;
 
-    private final Map<Stop, Transfer> accessTransfers;
-
-    private final Map<Stop, Transfer> egressTransfers;
-
 
     /**
      * Constructs an itinerary mapper for a request and a set of results
@@ -68,28 +64,22 @@ public class RaptorPathToItineraryMapper {
      * @param transitLayer the currently active transit layer (may have real-time data applied)
      * @param startOfTime the point in time all times in seconds are counted from
      * @param request the current routing request
-     * @param accessTransfers the access paths calculated for this request by access stop
-     * @param egressTransfers the egress paths calculated for this request by egress stop
      */
     public RaptorPathToItineraryMapper(
             TransitLayer transitLayer,
             ZonedDateTime startOfTime,
-            RoutingRequest request,
-            Map<Stop, Transfer> accessTransfers,
-            Map<Stop, Transfer> egressTransfers) {
+            RoutingRequest request) {
 
         this.transitLayer = transitLayer;
         this.startOfTime = startOfTime;
         this.request = request;
-        this.accessTransfers = accessTransfers;
-        this.egressTransfers = egressTransfers;
     }
 
     public Itinerary createItinerary(Path<TripSchedule> path) {
         List<Leg> legs = new ArrayList<>();
 
         // Map access leg
-        mapAccessLeg(legs, path.accessLeg(), accessTransfers);
+        mapAccessLeg(legs, path.accessLeg());
 
         // TODO: Add back this code when PathLeg interface contains object references
 
@@ -115,7 +105,7 @@ public class RaptorPathToItineraryMapper {
 
         // Map egress leg
         EgressPathLeg<TripSchedule> egressPathLeg = pathLeg.asEgressLeg();
-        mapEgressLeg(legs, egressPathLeg, egressTransfers);
+        mapEgressLeg(legs, egressPathLeg);
         propagateStopPlaceNamesToWalkingLegs(legs);
 
         Itinerary itinerary = new Itinerary(legs);
@@ -129,16 +119,20 @@ public class RaptorPathToItineraryMapper {
 
     private void mapAccessLeg(
             List<Leg> legs,
-            AccessPathLeg<TripSchedule> accessPathLeg,
-            Map<Stop, Transfer> accessPaths
+            AccessPathLeg<TripSchedule> accessPathLeg
     ) {
-        Stop accessToStop = transitLayer.getStopByIndex(accessPathLeg.toStop());
-        Transfer accessPath = accessPaths.get(accessToStop);
+        AccessEgress accessPath = (AccessEgress) accessPathLeg.access();
 
-        // TODO Need to account for multiple fromVertices
-        Place from = mapOriginTargetToPlace(request.rctx.fromVertices.iterator().next(), request.from);
-        Place to = mapStopToPlace(accessToStop);
-        mapNonTransitLeg(legs, accessPathLeg, accessPath, from, to, true);
+        if (accessPath.durationInSeconds() == 0) { return; }
+
+        GraphPath graphPath = new GraphPath(accessPath.getLastState(), false);
+
+        Itinerary subItinerary = GraphPathToItineraryMapper
+            .generateItinerary(graphPath, false, true, request.locale);
+
+        subItinerary.timeShiftToStartAt(createCalendar(accessPathLeg.fromTime()));
+
+        legs.addAll(subItinerary.legs);
     }
 
     private Leg mapTransitLeg(
@@ -179,14 +173,14 @@ public class RaptorPathToItineraryMapper {
             leg.arrivalDelay = tripTimes.getArrivalDelay(alightStopIndexInPattern);
         }
 
-        leg.serviceDate = new ServiceDate(request.getDateTime()).getAsString(); // TODO: This has to be changed for multi-day searches
+        leg.serviceDate = new ServiceDate(request.getDateTime()).asCompactString(); // TODO: This has to be changed for multi-day searches
         leg.intermediateStops = new ArrayList<>();
         leg.startTime = createCalendar(pathLeg.fromTime());
         leg.endTime = createCalendar(pathLeg.toTime());
-        leg.mode = tripPattern.mode;
+        leg.mode = TraverseMode.fromTransitMode(tripPattern.getMode());
         leg.tripId = trip.getId();
-        leg.from = mapStopToPlace(boardStop);
-        leg.to = mapStopToPlace(alightStop);
+        leg.from = mapStopToPlace(boardStop, boardStopIndexInPattern);
+        leg.to = mapStopToPlace(alightStop, alightStopIndexInPattern);
         List<Coordinate> transitLegCoordinates = extractTransitLegCoordinates(pathLeg);
         leg.legGeometry = PolylineEncoder.createEncodings(transitLegCoordinates);
         leg.distanceMeters = getDistanceFromCoordinates(transitLegCoordinates);
@@ -199,7 +193,7 @@ public class RaptorPathToItineraryMapper {
         leg.routeId = route.getId();
         leg.agencyName = route.getAgency().getName();
         leg.routeColor = route.getColor();
-        leg.tripShortName = route.getShortName();
+        leg.tripShortName = trip.getTripShortName();
         leg.agencyId = route.getAgency().getId();
         leg.routeShortName = route.getShortName();
         leg.routeLongName = route.getLongName();
@@ -234,23 +228,27 @@ public class RaptorPathToItineraryMapper {
         Stop transferToStop = transitLayer.getStopByIndex(pathLeg.toStop());
         Transfer transfer = transitLayer.getTransferByStopIndex().get(pathLeg.fromStop()).stream().filter(t -> t.getToStop() == pathLeg.toStop()).findFirst().get();
 
-        Place from = mapStopToPlace(transferFromStop);
-        Place to = mapStopToPlace(transferToStop);
+        Place from = mapStopToPlace(transferFromStop, null);
+        Place to = mapStopToPlace(transferToStop, null);
         mapNonTransitLeg(legs, pathLeg, transfer, from, to, false);
     }
 
     private void mapEgressLeg(
             List<Leg> legs,
-            EgressPathLeg<TripSchedule> egressPathLeg,
-            Map<Stop, Transfer> egressPaths
+            EgressPathLeg<TripSchedule> egressPathLeg
     ) {
-        Stop egressStop = transitLayer.getStopByIndex(egressPathLeg.fromStop());
-        Transfer egressPath = egressPaths.get(egressStop);
+        AccessEgress egressPath = (AccessEgress) egressPathLeg.egress();
 
-        Place from = mapStopToPlace(egressStop);
-        // TODO Need to account for multiple toVertices
-        Place to = mapOriginTargetToPlace(request.rctx.toVertices.iterator().next(), request.to);
-        mapNonTransitLeg(legs, egressPathLeg, egressPath, from, to, true);
+        if (egressPath.durationInSeconds() == 0) { return; }
+
+        GraphPath graphPath = new GraphPath(egressPath.getLastState(), false);
+
+        Itinerary subItinerary = GraphPathToItineraryMapper
+            .generateItinerary(graphPath, false, true, request.locale);
+
+        subItinerary.timeShiftToStartAt(createCalendar(egressPathLeg.fromTime()));
+
+        legs.addAll(subItinerary.legs);
     }
 
     private void mapNonTransitLeg(List<Leg> legs, PathLeg<TripSchedule> pathLeg, Transfer transfer, Place from, Place to, boolean onlyIfNonZeroDistance) {
@@ -270,7 +268,9 @@ public class RaptorPathToItineraryMapper {
                 legs.add(leg);
             }
         } else {
-            StateEditor se = new StateEditor(request, edges.get(0).getFromVertex());
+            RoutingRequest traverseRequest = request.clone();
+            traverseRequest.arriveBy = false;
+            StateEditor se = new StateEditor(traverseRequest, edges.get(0).getFromVertex());
             se.setTimeSeconds(startOfTime.plusSeconds(pathLeg.fromTime()).toEpochSecond());
             //se.setNonTransitOptionsFromState(states[0]);
             State s = se.makeState();
@@ -334,20 +334,21 @@ public class RaptorPathToItineraryMapper {
 
     private Place mapLocationToPlace(GenericLocation location) {
         if (location.label == null || location.label.isEmpty()) {
-            return new Place(location.lng, location.lat, String.format("%.6f, %.6f", location.lat, location.lng));
+            return new Place(location.lat, location.lng, String.format("%.6f, %.6f", location.lat, location.lng));
         } else {
-            return new Place(location.lng, location.lat, location.label);
+            return new Place(location.lat, location.lng, location.label);
         }
     }
 
     private Place mapTransitVertexToPlace(TransitStopVertex vertex) {
-        return mapStopToPlace(vertex.getStop());
+        return mapStopToPlace(vertex.getStop(), null);
     }
 
-    private Place mapStopToPlace(Stop stop) {
-        Place place = new Place(stop.getLon(), stop.getLat(), stop.getName());
+    private Place mapStopToPlace(Stop stop, Integer stopIndex) {
+        Place place = new Place(stop.getLat(), stop.getLon(), stop.getName());
         place.stopId = stop.getId();
         place.stopCode = stop.getCode();
+        place.stopIndex = stopIndex;
         place.platformCode = stop.getCode();
         place.zoneId = stop.getZone();
         place.vertexType = VertexType.TRANSIT;
@@ -373,8 +374,7 @@ public class RaptorPathToItineraryMapper {
             }
             if (boarded) {
                 Stop stop = tripPattern.stopPattern.stops[j];
-                Place place = mapStopToPlace(stop);
-                place.stopIndex = j;
+                Place place = mapStopToPlace(stop, j);
                 // TODO: fill out stopSequence
                 StopArrival visit = new StopArrival(
                         place,
@@ -396,13 +396,14 @@ public class RaptorPathToItineraryMapper {
         TripSchedule tripSchedule = pathLeg.trip();
         boolean boarded = false;
         for (int j = 0; j < tripPattern.stopPattern.stops.length; j++) {
+            int currentStopIndex = transitLayer.getStopIndex().indexByStop.get(tripPattern.getStop(j));
             if (boarded) {
                 transitLegCoordinates.addAll(Arrays.asList(tripPattern.getHopGeometry(j - 1).getCoordinates()));
             }
-            if (!boarded && tripSchedule.departure(j) == pathLeg.fromTime()) {
+            if (!boarded && tripSchedule.departure(j) == pathLeg.fromTime() && currentStopIndex == pathLeg.fromStop()) {
                 boarded = true;
             }
-            if (boarded && tripSchedule.arrival(j) == pathLeg.toTime()) {
+            if (boarded && tripSchedule.arrival(j) == pathLeg.toTime() && currentStopIndex == pathLeg.toStop()) {
                 break;
             }
         }

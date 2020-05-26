@@ -1,5 +1,6 @@
 package org.opentripplanner.transit.raptor.api.path;
 
+import org.opentripplanner.transit.raptor.api.transit.RaptorTransfer;
 import org.opentripplanner.transit.raptor.api.transit.RaptorTripSchedule;
 
 import java.util.Objects;
@@ -11,13 +12,15 @@ import java.util.Objects;
  * @param <T> The TripSchedule type defined by the user of the raptor API.
  */
 public final class AccessPathLeg<T extends RaptorTripSchedule> implements PathLeg<T> {
+    private final RaptorTransfer access;
     private final int fromTime;
     private final int toStop;
     private final int toTime;
     private final TransitPathLeg<T> next;
 
 
-    public AccessPathLeg(int fromTime, int toStop, int toTime, TransitPathLeg<T> next) {
+    public AccessPathLeg(RaptorTransfer access, int toStop, int fromTime, int toTime, TransitPathLeg<T> next) {
+        this.access = access;
         this.fromTime = fromTime;
         this.toStop = toStop;
         this.toTime = toTime;
@@ -41,9 +44,18 @@ public final class AccessPathLeg<T extends RaptorTripSchedule> implements PathLe
         return toTime;
     }
 
+    public RaptorTransfer access() {
+        return access;
+    }
+
     @Override
     public TransitPathLeg<T> nextLeg() {
         return next;
+    }
+
+    @Override
+    public String toString() {
+        return "Access " + asString(toStop);
     }
 
     @Override

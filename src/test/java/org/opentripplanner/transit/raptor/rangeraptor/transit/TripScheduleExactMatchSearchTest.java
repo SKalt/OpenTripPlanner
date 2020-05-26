@@ -1,13 +1,13 @@
 package org.opentripplanner.transit.raptor.rangeraptor.transit;
 
 import org.junit.Test;
-import org.opentripplanner.transit.raptor.api.TestTripPattern;
-import org.opentripplanner.transit.raptor.api.TestRaptorTripSchedule;
+import org.opentripplanner.transit.raptor._shared.TestRoute;
+import org.opentripplanner.transit.raptor._shared.TestRaptorTripSchedule;
+import org.opentripplanner.transit.raptor.api.transit.RaptorTimeTable;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import static org.opentripplanner.transit.raptor.api.TestRaptorTripSchedule.createTripSchedule;
 
 public class TripScheduleExactMatchSearchTest {
 
@@ -18,14 +18,17 @@ public class TripScheduleExactMatchSearchTest {
     private static final int TRIP_TIME = 500;
     private static final boolean FORWARD = true;
     private static final boolean REVERSE = false;
-    private static final TestRaptorTripSchedule TRIP_SCHEDULE = createTripSchedule(0, TRIP_TIME);
-    private static final TestTripPattern TRIP_PATTERN = new TestTripPattern(TRIP_SCHEDULE);
+    private static final TestRaptorTripSchedule TRIP_SCHEDULE = TestRaptorTripSchedule
+            .create("T1")
+            .withBoardAndAlightTimes(TRIP_TIME)
+            .build();
+    private static final RaptorTimeTable<TestRaptorTripSchedule> TIME_TABLE = new TestRoute(TRIP_SCHEDULE);
 
     private TripScheduleSearch<TestRaptorTripSchedule> subject;
 
     public void setup(boolean forward) {
-        TransitCalculator calculator = TransitCalculator.testDummyCalculator(200, forward);
-        subject = calculator.createExactTripSearch(TRIP_PATTERN, (t) -> false);
+        TransitCalculator calculator = TransitCalculator.testDummyCalculator(forward);
+        subject = calculator.createExactTripSearch(TIME_TABLE);
     }
 
     @Test

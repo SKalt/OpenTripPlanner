@@ -1,16 +1,15 @@
 package org.opentripplanner.transit.raptor.service;
 
 import org.junit.Test;
-import org.opentripplanner.transit.raptor.api.TestRaptorTripSchedule;
+import org.opentripplanner.transit.raptor._shared.TestRaptorTripSchedule;
 import org.opentripplanner.transit.raptor.api.request.Optimization;
 import org.opentripplanner.transit.raptor.api.request.RaptorProfile;
 import org.opentripplanner.transit.raptor.api.request.RaptorRequest;
 import org.opentripplanner.transit.raptor.api.request.RaptorRequestBuilder;
-import org.opentripplanner.transit.raptor.api.transit.TransferLeg;
+import org.opentripplanner.transit.raptor.api.transit.RaptorTransfer;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import static org.opentripplanner.transit.raptor.service.HeuristicToRunResolver.resolveHeuristicToRunBasedOnOptimizationsAndSearchParameters;
 
 public class HeuristicToRunResolverTest {
@@ -50,27 +49,6 @@ public class HeuristicToRunResolverTest {
         given(_x_, _x_, LAT, WIN).expect(_x_, REV);
         given(_x_, _x_, LAT, _x_).expect(_x_, REV);
         // Skip alternatives with both EAT & LAT off.
-    }
-
-    @Test
-    public void resolveHeuristicToRunForStopFilter() {
-        RaptorRequestBuilder<TestRaptorTripSchedule> b = new RaptorRequestBuilder<>();
-        b.profile(RaptorProfile.MULTI_CRITERIA);
-        // Add some dummy legs
-        b.searchParams().accessLegs().add(dummyLeg());
-        b.searchParams().egressLegs().add(dummyLeg());
-        b.enableOptimization(Optimization.TRANSFERS_STOP_FILTER);
-        b.searchParams().earliestDepartureTime(10_000);
-        b.searchParams().latestArrivalTime(20_000);
-        b.searchParams().searchWindowInSeconds(6_000);
-
-        resolveHeuristicToRunBasedOnOptimizationsAndSearchParameters(
-                b.build(),
-                this::enableForward,
-                this::enableReverse
-        );
-        assertTrue(forward);
-        assertTrue(reverse);
     }
 
     @Test
@@ -141,9 +119,11 @@ public class HeuristicToRunResolverTest {
         reverse = true;
     }
 
-    private TransferLeg dummyLeg() {
-        return new TransferLeg() {
+    private RaptorTransfer dummyLeg() {
+        return new RaptorTransfer() {
             @Override public int stop() { return 1; }
+            @Override public int earliestDepartureTime(int requestedDepartureTime) { return requestedDepartureTime; }
+            @Override public int latestArrivalTime(int requestedArrivalTime) { return requestedArrivalTime; }
             @Override public int durationInSeconds() { return 10; }
         };
     }

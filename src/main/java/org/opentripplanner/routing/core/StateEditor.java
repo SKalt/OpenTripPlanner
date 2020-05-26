@@ -2,6 +2,7 @@ package org.opentripplanner.routing.core;
 
 import org.opentripplanner.routing.graph.Edge;
 import org.opentripplanner.routing.graph.Vertex;
+import org.opentripplanner.routing.api.request.RoutingRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -206,6 +207,7 @@ public class StateEditor {
     public void beginVehicleRenting(TraverseMode vehicleMode) {
         cloneStateDataAsNeeded();
         child.stateData.usingRentedBike = true;
+        child.stateData.hasUsedRentedBike = true;
         child.stateData.nonTransitMode = vehicleMode;
     }
 
@@ -268,6 +270,19 @@ public class StateEditor {
         child.stateData.carParked = state.isCarParked();
         child.stateData.bikeParked = state.isBikeParked();
         child.stateData.usingRentedBike = state.isBikeRenting();
+    }
+
+    public void setTaxiState(CarPickupState carPickupState) {
+        child.stateData.carPickupState = carPickupState;
+        switch (carPickupState) {
+            case WALK_TO_PICKUP:
+            case WALK_FROM_DROP_OFF:
+                child.stateData.nonTransitMode = TraverseMode.WALK;
+                break;
+            case IN_CAR:
+                child.stateData.nonTransitMode = TraverseMode.CAR;
+                break;
+        }
     }
 
     /* PUBLIC GETTER METHODS */

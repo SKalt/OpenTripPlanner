@@ -3,12 +3,9 @@ package org.opentripplanner.routing.graph;
 import org.locationtech.jts.geom.LineString;
 import org.opentripplanner.model.Trip;
 import org.opentripplanner.common.MavenVersion;
-import org.opentripplanner.routing.core.RoutingRequest;
+import org.opentripplanner.routing.api.request.RoutingRequest;
 import org.opentripplanner.routing.core.State;
-import org.opentripplanner.routing.util.IncrementingIdGenerator;
-import org.opentripplanner.routing.util.UniqueIdGenerator;
 
-import javax.xml.bind.annotation.XmlTransient;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -215,7 +212,6 @@ public abstract class Edge implements Serializable {
     private static final ValidVertexTypes VALID_VERTEX_TYPES = new ValidVertexTypes(Vertex.class,
             Vertex.class);
 
-    @XmlTransient
     public ValidVertexTypes getValidVertexTypes() {
         return VALID_VERTEX_TYPES;
     }

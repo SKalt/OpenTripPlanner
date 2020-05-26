@@ -1,8 +1,9 @@
 package org.opentripplanner.transit.raptor.rangeraptor.multicriteria;
 
 import org.opentripplanner.transit.raptor.api.path.Path;
+import org.opentripplanner.transit.raptor.api.transit.CostCalculator;
 import org.opentripplanner.transit.raptor.api.transit.IntIterator;
-import org.opentripplanner.transit.raptor.api.transit.TransferLeg;
+import org.opentripplanner.transit.raptor.api.transit.RaptorTransfer;
 import org.opentripplanner.transit.raptor.api.transit.RaptorTripSchedule;
 import org.opentripplanner.transit.raptor.rangeraptor.WorkerLifeCycle;
 import org.opentripplanner.transit.raptor.rangeraptor.WorkerState;
@@ -12,7 +13,6 @@ import org.opentripplanner.transit.raptor.rangeraptor.multicriteria.arrivals.Tra
 import org.opentripplanner.transit.raptor.rangeraptor.multicriteria.arrivals.TransitStopArrival;
 import org.opentripplanner.transit.raptor.rangeraptor.multicriteria.heuristic.HeuristicsProvider;
 import org.opentripplanner.transit.raptor.rangeraptor.path.DestinationArrivalPaths;
-import org.opentripplanner.transit.raptor.rangeraptor.transit.CostCalculator;
 import org.opentripplanner.transit.raptor.rangeraptor.transit.TransitCalculator;
 
 import java.util.ArrayList;
@@ -22,12 +22,12 @@ import java.util.List;
 
 
 /**
- * Tracks the state of a RAPTOR search, specifically the best arrival times at each transit stop at the end of a
- * particular round, along with associated data to reconstruct paths etc.
+ * Tracks the state of a RAPTOR search, specifically the best arrival times at each transit stop at
+ * the end of a particular round, along with associated data to reconstruct paths etc.
  * <p/>
- * This is grouped into a separate class (rather than just having the fields in the raptor worker class) because we
- * want the Algorithm to be as clean as possible and to be able to swap the state implementation - try out and
- * experiment with different state implementations.
+ * This is grouped into a separate class (rather than just having the fields in the raptor worker
+ * class) because we want the Algorithm to be as clean as possible and to be able to swap the state
+ * implementation - try out and experiment with different state implementations.
  *
  * @param <T> The TripSchedule type defined by the user of the raptor API.
  */
@@ -41,7 +41,8 @@ final public class McRangeRaptorWorkerState<T extends RaptorTripSchedule> implem
     private final TransitCalculator transitCalculator;
 
     /**
-     * create a RaptorState for a network with a particular number of stops, and a given maximum duration
+     * create a RaptorState for a network with a particular number of stops, and a given maximum
+     * duration
      */
     public McRangeRaptorWorkerState(
             Stops<T> stops,
@@ -50,7 +51,6 @@ final public class McRangeRaptorWorkerState<T extends RaptorTripSchedule> implem
             CostCalculator costCalculator,
             TransitCalculator transitCalculator,
             WorkerLifeCycle lifeCycle
-
     ) {
         this.stops = stops;
         this.paths = paths;
@@ -64,10 +64,8 @@ final public class McRangeRaptorWorkerState<T extends RaptorTripSchedule> implem
         lifeCycle.onTransfersForRoundComplete(this::transfersForRoundComplete);
     }
 
-    /*
-     The below methods are ordered after the sequence they naturally appear in the algorithm, also
-     private life-cycle callbacks are listed here (not in the private method section).
-    */
+    // The below methods are ordered after the sequence they naturally appear in the algorithm,
+    // also private life-cycle callbacks are listed here (not in the private method section).
 
     // This method is private, but is part of Worker life cycle
     private void setupIteration() {
@@ -77,14 +75,14 @@ final public class McRangeRaptorWorkerState<T extends RaptorTripSchedule> implem
     }
 
     @Override
-    public void setInitialTimeForIteration(TransferLeg accessLeg, int iterationDepartureTime) {
+    public void setInitialTimeForIteration(RaptorTransfer accessLeg, int departureTime) {
         addStopArrival(
                 new AccessStopArrival<>(
                         accessLeg.stop(),
-                        iterationDepartureTime,
+                        departureTime,
                         accessLeg.durationInSeconds(),
                         costCalculator.walkCost(accessLeg.durationInSeconds()),
-                        transitCalculator
+                        accessLeg
                 )
         );
     }
@@ -111,20 +109,50 @@ final public class McRangeRaptorWorkerState<T extends RaptorTripSchedule> implem
     /**
      * Set the time at a transit stop iff it is optimal.
      */
-    void transitToStop(AbstractStopArrival<T> previousStopArrival, int stop, int alightTime, int boardTime, T trip) {
-        if (exceedsTimeLimit(alightTime)) {
-            return;
-        }
-        int cost = costCalculator.transitArrivalCost(previousStopArrival.arrivalTime(), boardTime, alightTime);
-        int duration = travelDuration(previousStopArrival, boardTime, alightTime);
-        arrivalsCache.add(new TransitStopArrival<>(previousStopArrival, stop, alightTime, boardTime, trip, duration, cost));
+    final void transitToStop(
+            final AbstractStopArrival<T> previousStopArrival,
+            final int stop,
+            final int alightTime,
+            final int alightSlack,
+            final int boardTime,
+            final T trip
+    ) {
+        final int prevStopArrivalTime = previousStopArrival.arrivalTime();
+        final int stopArrivalTime = alightTime + alightSlack;
+
+        if (exceedsTimeLimit(stopArrivalTime)) { return; }
+
+        // Calculate wait time before and after the transit leg
+        int waitTime = (boardTime - prevStopArrivalTime) + alightSlack;
+
+        int cost = costCalculator.transitArrivalCost(
+            waitTime,
+            alightTime - boardTime,
+            previousStopArrival.stop(),
+            stop
+        );
+
+        int totalTravelTime = previousStopArrival.travelDuration()
+                + (stopArrivalTime - prevStopArrivalTime);
+
+        arrivalsCache.add(
+                new TransitStopArrival<>(
+                        previousStopArrival,
+                        stop,
+                        stopArrivalTime,
+                        boardTime,
+                        trip,
+                        totalTravelTime,
+                        cost
+                )
+        );
     }
 
     /**
      * Set the time at a transit stops iff it is optimal.
      */
     @Override
-    public void transferToStops(int fromStop, Iterator<? extends TransferLeg> transfers) {
+    public void transferToStops(int fromStop, Iterator<? extends RaptorTransfer> transfers) {
         Iterable<? extends AbstractStopArrival<T>> fromArrivals = stops.listArrivalsAfterMarker(fromStop);
 
         while (transfers.hasNext()) {
@@ -158,7 +186,7 @@ final public class McRangeRaptorWorkerState<T extends RaptorTripSchedule> implem
     /* private methods */
 
 
-    private void transferToStop(Iterable<? extends AbstractStopArrival<T>> fromArrivals, TransferLeg transfer) {
+    private void transferToStop(Iterable<? extends AbstractStopArrival<T>> fromArrivals, RaptorTransfer transfer) {
         final int transferTimeInSeconds = transfer.durationInSeconds();
 
         for (AbstractStopArrival<T> it : fromArrivals) {
@@ -189,11 +217,4 @@ final public class McRangeRaptorWorkerState<T extends RaptorTripSchedule> implem
         return transitCalculator.exceedsTimeLimit(time);
     }
 
-    private int travelDuration(AbstractStopArrival<T> prev, int boardTime, int alightTime) {
-        if (prev.arrivedByAccessLeg()) {
-            return transitCalculator.addBoardSlack(prev.travelDuration()) + alightTime - boardTime;
-        } else {
-            return prev.travelDuration() + alightTime - prev.arrivalTime();
-        }
-    }
 }

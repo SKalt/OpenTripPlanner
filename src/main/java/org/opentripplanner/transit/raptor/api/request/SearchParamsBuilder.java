@@ -1,11 +1,10 @@
 package org.opentripplanner.transit.raptor.api.request;
 
 import org.opentripplanner.transit.raptor.api.transit.RaptorTripSchedule;
-import org.opentripplanner.transit.raptor.api.transit.TransferLeg;
+import org.opentripplanner.transit.raptor.api.transit.RaptorTransfer;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.BitSet;
 import java.util.Collection;
 
 /**
@@ -25,10 +24,8 @@ public class SearchParamsBuilder<T extends RaptorTripSchedule> {
     private int maxNumberOfTransfers;
     private double relaxCostAtDestination;
     private boolean timetableEnabled;
-    private boolean allowWaitingBetweenAccessAndTransit;
-    private BitSet stopFilter;
-    private final Collection<TransferLeg> accessLegs = new ArrayList<>();
-    private final Collection<TransferLeg> egressLegs = new ArrayList<>();
+    private final Collection<RaptorTransfer> accessLegs = new ArrayList<>();
+    private final Collection<RaptorTransfer> egressLegs = new ArrayList<>();
 
     public SearchParamsBuilder(RaptorRequestBuilder<T> parent, SearchParams defaults) {
         this.parent = parent;
@@ -40,8 +37,6 @@ public class SearchParamsBuilder<T extends RaptorTripSchedule> {
         this.maxNumberOfTransfers = defaults.maxNumberOfTransfers();
         this.relaxCostAtDestination = defaults.relaxCostAtDestination();
         this.timetableEnabled = defaults.timetableEnabled();
-        this.allowWaitingBetweenAccessAndTransit = defaults.allowWaitingBetweenAccessAndTransit();
-        this.stopFilter = defaults.stopFilter();
         this.accessLegs.addAll(defaults.accessLegs());
         this.egressLegs.addAll(defaults.egressLegs());
     }
@@ -129,51 +124,33 @@ public class SearchParamsBuilder<T extends RaptorTripSchedule> {
         return this;
     }
 
-    public boolean allowWaitingBetweenAccessAndTransit() {
-        return allowWaitingBetweenAccessAndTransit;
-    }
-
-    public SearchParamsBuilder<T> allowWaitingBetweenAccessAndTransit(boolean enable) {
-        this.allowWaitingBetweenAccessAndTransit = enable;
-        return this;
-    }
-
-    public BitSet stopFilter() {
-        return stopFilter;
-    }
-
-    public SearchParamsBuilder<T> stopFilter(BitSet stopFilter) {
-        this.stopFilter = stopFilter;
-        return this;
-    }
-
-    public Collection<TransferLeg> accessLegs() {
+    public Collection<RaptorTransfer> accessLegs() {
         return accessLegs;
     }
 
-    public SearchParamsBuilder<T> addAccessStop(TransferLeg accessLeg) {
+    public SearchParamsBuilder<T> addAccessStop(RaptorTransfer accessLeg) {
         this.accessLegs.add(accessLeg);
         return this;
     }
 
-    public SearchParamsBuilder<T> addAccessStops(Iterable<TransferLeg> accessLegs) {
-        for (TransferLeg it : accessLegs) {
+    public SearchParamsBuilder<T> addAccessStops(Iterable<RaptorTransfer> accessLegs) {
+        for (RaptorTransfer it : accessLegs) {
             addAccessStop(it);
         }
         return this;
     }
 
-    public Collection<TransferLeg> egressLegs() {
+    public Collection<RaptorTransfer> egressLegs() {
         return egressLegs;
     }
 
-    public SearchParamsBuilder<T> addEgressStop(TransferLeg egressLeg) {
+    public SearchParamsBuilder<T> addEgressStop(RaptorTransfer egressLeg) {
         this.egressLegs.add(egressLeg);
         return this;
     }
 
-    public SearchParamsBuilder<T> addEgressStops(Iterable<TransferLeg> egressLegs) {
-        for (TransferLeg it : egressLegs) {
+    public SearchParamsBuilder<T> addEgressStops(Iterable<RaptorTransfer> egressLegs) {
+        for (RaptorTransfer it : egressLegs) {
             addEgressStop(it);
         }
         return this;

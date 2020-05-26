@@ -3,11 +3,9 @@ package org.opentripplanner.transit.raptor.rangeraptor.transit;
 
 import org.opentripplanner.transit.raptor.api.request.SearchParams;
 import org.opentripplanner.transit.raptor.api.transit.IntIterator;
-import org.opentripplanner.transit.raptor.api.transit.TripPatternInfo;
+import org.opentripplanner.transit.raptor.api.transit.RaptorTimeTable;
+import org.opentripplanner.transit.raptor.api.transit.RaptorTransfer;
 import org.opentripplanner.transit.raptor.api.transit.RaptorTripSchedule;
-import org.opentripplanner.transit.raptor.rangeraptor.path.PathMapper;
-
-import java.util.function.Function;
 
 import static org.opentripplanner.transit.raptor.util.TimeUtils.hm2time;
 
@@ -48,31 +46,6 @@ public interface TransitCalculator {
     int duration(int timeA, int timeB);
 
     /**
-     * Calculate the earlies possible board time, adding board slack in the case
-     * of a forward search, adding nothing in the case of a reverse search.
-     *
-     * @param time - the arrival time (forward search) or board time (reverse search)
-     * @return the earliest possible board time to use in the next trip search.
-     */
-    int earliestBoardTime(int time);
-
-    /**
-     * Add boardSlack to time.
-     *
-     * @param time - any time
-     * @return the time plus boardSlack
-     */
-    int addBoardSlack(int time);
-
-    /**
-     * Remove boardSlack from time.
-     *
-     * @param time - any time
-     * @return the time minus boardSlack
-     */
-    int removeBoardSlack(int time);
-
-    /**
      * For a normal search return the trip arrival time at stop position.
      * For a reverse search return the next trips departure time at stop position with the boardSlack added.
      *
@@ -80,7 +53,7 @@ public interface TransitCalculator {
      * @param stopPositionInPattern the stop position/index
      * @param <T> The TripSchedule type defined by the user of the raptor API.
      */
-    <T extends RaptorTripSchedule> int latestArrivalTime(T onTrip, int stopPositionInPattern);
+    <T extends RaptorTripSchedule> int stopArrivalTime(T onTrip, int stopPositionInPattern, int alightSlack);
 
 
     /**
@@ -107,12 +80,6 @@ public interface TransitCalculator {
      */
     boolean isBest(int subject, int candidate);
 
-
-    /**
-     * Calculate the origin departure time using the given transitBoardingTime and access leg duration.
-     */
-    int originDepartureTime(final int firstTransitBoardTime, final int accessLegDuration);
-
     /**
      * Uninitialized time values is set to this value to mark them as not set, and to mark the
      * arrival as unreached. A big value(or very small value) is used to simplify the comparisons
@@ -122,6 +89,13 @@ public interface TransitCalculator {
      * search this should be Integer.MIN_VALUE.
      */
     int unreachedTime();
+
+    /**
+     * Selects the earliest or latest possible departure time depending on the direction.
+     * For forward search it will be the earliest possible departure time, while for reverse search
+     * it uses the latest arrival time.
+     */
+    int departureTime(RaptorTransfer transfer, int departureTime);
 
     /**
      * Return an iterator, iterating over the minutes in the RangeRaptor algorithm.
@@ -159,30 +133,21 @@ public interface TransitCalculator {
      * a given pattern. This is used to to inject a forward or reverse
      * search into the worker (strategy design pattern).
      *
-     * @param pattern the pattern to search
+     * @param timeTable the trip time-table to search
      * @param <T> The TripSchedule type defined by the user of the raptor API.
      * @return The trip search strategy implementation.
      */
     <T extends RaptorTripSchedule> TripScheduleSearch<T> createTripSearch(
-            TripPatternInfo<T> pattern,
-            Function<T, Boolean> skipTripScheduleCallback
+            RaptorTimeTable<T> timeTable
     );
 
     /**
-     * Same as {@link #createTripSearch(TripPatternInfo, Function)}, but create a
+     * Same as {@link #createTripSearch(RaptorTimeTable)}, but create a
      * trip search that only accept exact trip timeLimit matches.
      */
     <T extends RaptorTripSchedule> TripScheduleSearch<T> createExactTripSearch(
-            TripPatternInfo<T> pattern,
-            Function<T, Boolean> skipTripScheduleCallback
+            RaptorTimeTable<T> timeTable
     );
-
-    /**
-     * Create a new path mapper depending on the search direction.
-     *
-     * @param <T> The TripSchedule type defined by the user of the raptor API.
-     */
-    <T extends RaptorTripSchedule> PathMapper<T> createPathMapper();
 
     /**
      * Return a calculator for test purpose. The following parameters are fixed:
@@ -194,19 +159,17 @@ public interface TransitCalculator {
      * </ul>
      * @param forward if true create a calculator for forward search, if false search
      */
-    static TransitCalculator testDummyCalculator(int boardSlackInSeconds, boolean forward) {
+    static TransitCalculator testDummyCalculator(boolean forward) {
         return forward
-                ? new ForwardSearchTransitCalculator(
+                ? new ForwardTransitCalculator(
                         10,
-                        boardSlackInSeconds,
                         hm2time(8,0),
                         2 * 60 * 60, // 2 hours
                         TIME_NOT_SET,
                         60
                 )
-                : new ReverseSearchTransitCalculator(
+                : new ReverseTransitCalculator(
                         10,
-                        boardSlackInSeconds,
                         hm2time(8,0),
                         2 * 60 * 60, // 2 hours
                         TIME_NOT_SET,

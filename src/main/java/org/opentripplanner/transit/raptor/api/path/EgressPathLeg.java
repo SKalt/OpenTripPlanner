@@ -1,5 +1,6 @@
 package org.opentripplanner.transit.raptor.api.path;
 
+import org.opentripplanner.transit.raptor.api.transit.RaptorTransfer;
 import org.opentripplanner.transit.raptor.api.transit.RaptorTripSchedule;
 
 import java.util.Objects;
@@ -11,11 +12,13 @@ import java.util.Objects;
  * @param <T> The TripSchedule type defined by the user of the raptor API.
  */
 public final class EgressPathLeg<T extends RaptorTripSchedule> implements PathLeg<T> {
+    private final RaptorTransfer egress;
     private final int fromStop;
     private final int fromTime;
     private final int toTime;
 
-    public EgressPathLeg(int fromStop, int fromTime, int toTime) {
+    public EgressPathLeg(RaptorTransfer egress, int fromStop, int fromTime, int toTime) {
+        this.egress = egress;
         this.fromStop = fromStop;
         this.fromTime = fromTime;
         this.toTime = toTime;
@@ -38,6 +41,10 @@ public final class EgressPathLeg<T extends RaptorTripSchedule> implements PathLe
         return toTime;
     }
 
+    public RaptorTransfer egress() {
+        return egress;
+    }
+
     /**
      * @throws UnsupportedOperationException - an egress leg is the last leg in a path and does not have a next leg.
      */
@@ -51,6 +58,11 @@ public final class EgressPathLeg<T extends RaptorTripSchedule> implements PathLe
     @Override
     public final boolean isEgressLeg() {
         return true;
+    }
+
+    @Override
+    public String toString() {
+        return "Egress " + asString();
     }
 
     @Override

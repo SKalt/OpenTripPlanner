@@ -3,8 +3,8 @@ package org.opentripplanner.model.plan;
 import com.google.common.collect.Lists;
 import org.opentripplanner.common.model.P2;
 import org.opentripplanner.model.BikeRentalStationInfo;
+import org.opentripplanner.model.WgsCoordinate;
 import org.opentripplanner.routing.alertpatch.Alert;
-import org.opentripplanner.routing.core.TraverseMode;
 import org.opentripplanner.routing.graph.Edge;
 
 import java.util.Collection;
@@ -83,14 +83,9 @@ public class WalkStep {
     public Boolean bogusName = false;
 
     /**
-     * The longitude of start of the step
+     * The coordinate of start of the step
      */
-    public double lon;
-
-    /**
-     * The latitude of start of the step
-     */
-    public double lat;
+    public WgsCoordinate startLocation;
 
     /**
      * The elevation profile as a comma-separated list of x,y values. x is the distance from the start of the step, y is the elevation at this
@@ -101,14 +96,6 @@ public class WalkStep {
     public final Set<Alert> alerts = new HashSet<>();
 
     public double angle;
-
-    /**
-     * The walkStep's mode; only populated if this is the first step of that mode in the leg.
-     * Used only in generating the streetEdges array in StreetSegment; not serialized.
-     *
-     * TODO OTP2 - This is not used ?
-     */
-    public TraverseMode newMode;
 
     /**
      * The street edges that make up this walkStep.
@@ -140,7 +127,7 @@ public class WalkStep {
 
     public void addAlerts(Collection<Alert> alerts) {
         if(alerts == null) { return; }
-        this.addAlerts(alerts);
+        this.alerts.addAll(alerts);
     }
 
     public static RelativeDirection getRelativeDirection(double lastAngle, double thisAngle,

@@ -95,8 +95,7 @@ public class AlertToLegMapper {
         }
 
         if (leg.agencyId != null) {
-            String agencId = graph.index.getAgencyWithoutFeedId(leg.agencyId).getId();
-            Collection<AlertPatch> patches = alertPatchService(graph).getAgencyPatches(agencId);
+            Collection<AlertPatch> patches = alertPatchService(graph).getAgencyPatches(leg.agencyId);
             addAlertPatchesToLeg(leg, patches, requestedLocale, legStartTime, legEndTime);
         }
 
@@ -115,7 +114,7 @@ public class AlertToLegMapper {
 
     private static Collection<AlertPatch> getAlertsForStopAndRoute(Graph graph, FeedScopedId stopId, FeedScopedId routeId, boolean checkParentStop) {
 
-        Stop stop = graph.index.getStopForId().get(stopId);
+        Stop stop = graph.index.getStopForId(stopId);
         if (stop == null) {
             return new ArrayList<>();
         }
@@ -124,7 +123,7 @@ public class AlertToLegMapper {
             if (alertsForStopAndRoute == null) {
                 alertsForStopAndRoute = new HashSet<>();
             }
-            if (stop.getParentStation() != null) {
+            if (stop.isPartOfStation()) {
                 //Also check parent
                 Collection<AlertPatch> alerts = graph.getSiriAlertPatchService().getStopAndRoutePatches(stop.getParentStation().getId(), routeId);
                 if (alerts != null) {
@@ -152,7 +151,7 @@ public class AlertToLegMapper {
 
     private static Collection<AlertPatch> getAlertsForStopAndTrip(Graph graph, FeedScopedId stopId, FeedScopedId tripId, boolean checkParentStop) {
 
-        Stop stop = graph.index.getStopForId().get(stopId);
+        Stop stop = graph.index.getStopForId(stopId);
         if (stop == null) {
             return new ArrayList<>();
         }
@@ -162,7 +161,7 @@ public class AlertToLegMapper {
             if (alertsForStopAndTrip == null) {
                 alertsForStopAndTrip = new HashSet<>();
             }
-            if  (stop.getParentStation() != null) {
+            if  (stop.isPartOfStation()) {
                 // Also check parent
                 Collection<AlertPatch> alerts = graph.getSiriAlertPatchService().getStopAndTripPatches(stop.getParentStation().getId(), tripId);
                 if (alerts != null) {
@@ -187,7 +186,7 @@ public class AlertToLegMapper {
     }
 
     private static Collection<AlertPatch> getAlertsForStop(Graph graph, FeedScopedId stopId, boolean checkParentStop) {
-        Stop stop = graph.index.getStopForId().get(stopId);
+        Stop stop = graph.index.getStopForId(stopId);
         if (stop == null) {
             return new ArrayList<>();
         }
@@ -198,7 +197,7 @@ public class AlertToLegMapper {
                 alertsForStop = new HashSet<>();
             }
 
-            if  (stop.getParentStation() != null) {
+            if  (stop.isPartOfStation()) {
                 // Also check parent
                 Collection<AlertPatch> parentStopAlerts = graph.getSiriAlertPatchService().getStopPatches(stop.getParentStation().getId());
                 if (parentStopAlerts != null) {

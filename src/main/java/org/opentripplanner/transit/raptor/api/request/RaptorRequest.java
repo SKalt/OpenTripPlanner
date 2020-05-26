@@ -1,8 +1,9 @@
 package org.opentripplanner.transit.raptor.api.request;
 
 import com.esotericsoftware.minlog.Log;
+import org.opentripplanner.transit.raptor.api.transit.RaptorSlackProvider;
 import org.opentripplanner.transit.raptor.api.transit.RaptorTripSchedule;
-import org.opentripplanner.transit.raptor.api.transit.TransitDataProvider;
+import org.opentripplanner.transit.raptor.api.transit.RaptorTransitDataProvider;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -12,7 +13,7 @@ import java.util.Set;
 
 /**
  * All input parameters to RangeRaptor that is specific to a routing request.
- * See {@link TransitDataProvider} for transit data.
+ * See {@link RaptorTransitDataProvider} for transit data.
  *
  * @param <T> The TripSchedule type defined by the user of the raptor API.
  */
@@ -23,6 +24,7 @@ public class RaptorRequest<T extends RaptorTripSchedule> {
     private final Set<Optimization> optimizations;
     private final McCostParams mcCostParams;
     private final DebugRequest<T> debug;
+    private final RaptorSlackProvider slackProvider;
 
 
     static <T extends RaptorTripSchedule> RaptorRequest<T> defaults() {
@@ -35,6 +37,8 @@ public class RaptorRequest<T extends RaptorTripSchedule> {
         searchDirection = SearchDirection.FORWARD;
         optimizations = Collections.emptySet();
         mcCostParams = McCostParams.DEFAULTS;
+        // Slack defaults: 1 minute for transfer-slack, 0 minutes for board- and alight-slack.
+        slackProvider = RaptorSlackProvider.defaults(60, 0, 0);
         debug = DebugRequest.defaults();
     }
 
@@ -44,6 +48,7 @@ public class RaptorRequest<T extends RaptorTripSchedule> {
         this.searchDirection = builder.searchDirection();
         this.optimizations = Set.copyOf(builder.optimizations());
         this.mcCostParams = new McCostParams(builder.mcCostFactors());
+        this.slackProvider = builder.slackProvider();
         this.debug = builder.debug().build();
         verify();
     }
@@ -94,6 +99,10 @@ public class RaptorRequest<T extends RaptorTripSchedule> {
         return searchDirection;
     }
 
+    public RaptorSlackProvider slackProvider() {
+        return slackProvider;
+    }
+
     /**
      * Return list of enabled optimizations.
      */
@@ -106,10 +115,6 @@ public class RaptorRequest<T extends RaptorTripSchedule> {
      */
     public boolean optimizationEnabled(Optimization optimization) {
         return optimization.isOneOf(optimizations);
-    }
-
-    public boolean useTransfersStopFilter() {
-        return optimizationEnabled(Optimization.TRANSFERS_STOP_FILTER);
     }
 
     public boolean useDestinationPruning() {
@@ -177,9 +182,6 @@ public class RaptorRequest<T extends RaptorTripSchedule> {
     private void verify() {
         searchParams.verify();
         if(!profile.is(RaptorProfile.MULTI_CRITERIA)) {
-            if(useTransfersStopFilter()) {
-                Log.warn("Stop filtering is only supported using McRangeRaptor");
-            }
             if(useDestinationPruning()) {
                 Log.warn("Destination pruning is only supported using McRangeRaptor");
             }
